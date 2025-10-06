@@ -1,471 +1,676 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apontamento de Produção</title>
+    <title>Painel de Aplicativos Interativo</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            color: #1f2937;
+            background-color: #f0f2f5;
+        }
+        #addAppModal, #appViewer, #deleteConfirmModal, #loginModal, #appLoginModal {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .app-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .app-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        #appFrame {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        /* Controle de visibilidade com base no login */
+        #addAppBtn, #logoutBtn, .delete-btn, .edit-btn { display: none; }
+        #loginBtn { display: flex; }
+
+        body.logged-in #addAppBtn,
+        body.logged-in #logoutBtn,
+        body.logged-in .delete-btn,
+        body.logged-in .edit-btn {
+            display: flex;
+        }
+        body.logged-in #loginBtn {
+            display: none;
+        }
+
+        /* Loading Spinner */
+        #loadingOverlay {
+            transition: opacity 0.3s ease;
+        }
+        .spinner {
+            border-top-color: #4f46e5;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Exposing Firebase services globally for use in the main script
-        window.firebase = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, collection, addDoc, onSnapshot, query, getDocs, Timestamp, setLogLevel };
-    </script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-2xl border border-gray-200">
-        <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">Apontamento de Produção</h1>
-        
-        <div class="text-center text-sm mb-4 text-gray-500">
-            <p>ID do Usuário: <span id="userIdDisplay" class="font-mono text-xs">Carregando...</span></p>
-        </div>
+<body class="antialiased text-gray-800">
 
-        <!-- Formulário de Apontamento -->
-        <div class="space-y-4">
-            <div>
-                <label for="responsavel" class="block text-sm font-medium text-gray-700">Nome do Responsável</label>
-                <input type="text" id="responsavel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Digite o nome aqui...">
-            </div>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-white">
+        <div class="spinner h-12 w-12 rounded-full border-4 border-t-4 border-gray-200"></div>
+    </div>
 
-            <div>
-                <label for="codigoProduto" class="block text-sm font-medium text-gray-700">Código do Produto</label>
-                <select id="codigoProduto" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
-                    <option value="" selected disabled>Selecione um código...</option>
-                    <option value="CAC0001-C">CAC0001-C</option>
-                    <option value="CBC0010-C">CBC0010-C</option>
-                    <option value="CAL0002-C">CAL0002-C</option>
-                </select>
-            </div>
 
-            <div>
-                <label for="quantidade" class="block text-sm font-medium text-gray-700">Quantidade Produzida</label>
-                <input type="number" id="quantidade" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Ex: 100">
-            </div>
-        </div>
-
-        <!-- Botões de Controle da Ordem -->
-        <div class="mt-6 flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <button id="iniciarBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors shadow-lg">Iniciar Ordem</button>
-            <button id="pausarBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors shadow-lg" disabled>Pausar</button>
-            <button id="finalizarBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors shadow-lg" disabled>Finalizar Ordem</button>
-            <button id="exportarBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors shadow-lg">Download CSV</button>
-        </div>
-
-        <!-- Display de Informações -->
-        <div id="display" class="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
-            <h2 class="text-xl font-semibold mb-4 text-gray-800">Resumo da Ordem</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <!-- Container do Painel Principal -->
+    <div id="dashboardContainer" class="min-h-screen p-4 sm:p-6 lg:p-8 invisible">
+        <div class="max-w-7xl mx-auto">
+            <header class="flex flex-col sm:flex-row items-center justify-between mb-8">
                 <div>
-                    <span class="font-medium text-gray-700">Início:</span>
-                    <span id="horaInicio" class="font-light text-gray-600">--</span>
+                    <h1 class="text-3xl font-bold text-gray-900">Meu Painel de Controle</h1>
+                    <p class="text-gray-500 mt-1">Acesse seus aplicativos em um só lugar.</p>
+                </div>
+                <div class="flex items-center space-x-4 mt-4 sm:mt-0">
+                     <button id="addAppBtn" class="w-full sm:w-auto items-center justify-center px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                        Adicionar Novo App
+                    </button>
+                    <button id="loginBtn" class="w-full sm:w-auto items-center justify-center px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                        Login
+                    </button>
+                    <button id="logoutBtn" class="w-full sm:w-auto items-center justify-center px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        Sair
+                    </button>
+                </div>
+            </header>
+            <main>
+                <div id="appGrid">
+                    <!-- Categorias e cartões de aplicativo aqui -->
+                </div>
+                <p id="emptyState" class="hidden text-center text-gray-500 mt-16 text-lg">Seu painel está vazio. Clique em "Adicionar Novo App" para começar!</p>
+            </main>
+        </div>
+    </div>
+
+    <!-- Container do Visualizador de App (com iframe) -->
+    <div id="appViewer" class="fixed inset-0 z-40 flex flex-col bg-white invisible opacity-0">
+        <header class="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+            <h2 id="appViewerTitle" class="text-xl font-bold text-gray-800"></h2>
+            <button id="backToDashboardBtn" class="flex items-center px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
+                Voltar ao Painel
+            </button>
+        </header>
+        <div class="flex-grow overflow-hidden">
+            <iframe id="appFrame" title="Visualizador de Aplicativo"></iframe>
+        </div>
+    </div>
+
+    <!-- Modals (Login, Add/Edit, Delete, App Login) -->
+    <!-- Modal de Login Principal -->
+    <div id="loginModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 invisible opacity-0">
+        <div id="loginModalContent" class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md transform transition-all scale-95 opacity-0">
+            <h1 class="text-3xl font-bold text-center text-gray-900 mb-6">Login</h1>
+            <form id="loginForm" class="space-y-6">
+                <div>
+                    <label for="username" class="text-sm font-medium text-gray-700">Usuário</label>
+                    <input id="username" name="username" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Digite seu usuário">
                 </div>
                 <div>
-                    <span class="font-medium text-gray-700">Fim:</span>
-                    <span id="horaFim" class="font-light text-gray-600">--</span>
+                    <label for="password" class="text-sm font-medium text-gray-700">Senha</label>
+                    <input id="password" name="password" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Digite sua senha">
                 </div>
-            </div>
-            <div class="mt-4">
-                <span class="font-medium text-gray-700">Tempo Líquido de Produção:</span>
-                <span id="tempoLiquido" class="font-bold text-green-600 text-lg">--</span>
-            </div>
-            <div class="mt-2">
-                <span class="font-medium text-gray-700">Produtividade:</span>
-                <span id="produtividade" class="font-bold text-green-600 text-lg">--</span>
-            </div>
-        </div>
-
-        <!-- Registro de Pausas -->
-        <div id="pausasContainer" class="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
-            <h3 class="text-xl font-semibold mb-4 text-gray-800">Registro de Pausas</h3>
-            <ul id="listaPausas" class="list-disc pl-5 space-y-2 text-gray-600"></ul>
-        </div>
-        
-        <!-- Histórico de Apontamentos -->
-        <div id="historicoContainer" class="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
-            <h3 class="text-xl font-semibold mb-4 text-gray-800">Histórico de Apontamentos</h3>
-            <ul id="historicoLista" class="list-none space-y-4">
-                <li class="text-gray-500">Carregando histórico...</li>
-            </ul>
-        </div>
-
-        <!-- Modal para Justificativa de Pausa (simulando um prompt) -->
-        <div id="justificativaModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
-            <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md border border-gray-200">
-                <h3 class="text-lg font-bold mb-4">Justificativa da Pausa</h3>
-                <textarea id="justificativaInput" rows="4" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Motivo da pausa (ex: café, manutenção, etc.)"></textarea>
-                <div class="mt-4 flex justify-end space-x-2">
-                    <button id="salvarJustificativaBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg">Salvar</button>
-                    <button id="cancelarJustificativaBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg">Cancelar</button>
+                <p id="loginError" class="text-sm text-center text-red-600 h-4"></p>
+                <div class="flex items-center justify-end space-x-4">
+                     <button type="button" id="cancelLoginBtn" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-colors">
+                        Entrar
+                    </button>
                 </div>
-            </div>
+            </form>
         </div>
+    </div>
 
-        <!-- Modal de Aviso -->
-        <div id="avisoModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
-            <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm border border-gray-200 text-center">
-                <p id="avisoText" class="text-lg mb-4 text-gray-700">--</p>
-                <button id="fecharAvisoBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg">OK</button>
+    <!-- Modal de Login do App Específico -->
+    <div id="appLoginModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 invisible opacity-0">
+        <div id="appLoginModalContent" class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md transform transition-all scale-95 opacity-0">
+            <h1 id="appLoginTitle" class="text-2xl font-bold text-center text-gray-900 mb-6">Acesso Restrito</h1>
+            <form id="appLoginForm" class="space-y-6">
+                <div>
+                    <label for="appUsername" class="text-sm font-medium text-gray-700">Usuário do App</label>
+                    <input id="appUsername" name="appUsername" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Digite o usuário">
+                </div>
+                <div>
+                    <label for="appPassword" class="text-sm font-medium text-gray-700">Senha do App</label>
+                    <input id="appPassword" name="appPassword" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Digite a senha">
+                </div>
+                <p id="appLoginError" class="text-sm text-center text-red-600 h-4"></p>
+                <div class="flex items-center justify-end space-x-4">
+                     <button type="button" id="cancelAppLoginBtn" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-colors">
+                        Acessar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para Adicionar/Editar App -->
+    <div id="addAppModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 invisible opacity-0 overflow-y-auto p-4">
+        <div id="modalContent" class="bg-white rounded-xl shadow-2xl p-6 sm:p-8 w-11/12 max-w-lg transform transition-all scale-95 opacity-0 my-8">
+            <h2 id="modalTitle" class="text-2xl font-bold mb-6">Adicionar Aplicativo</h2>
+            <form id="addAppForm">
+                <div class="mb-4">
+                    <label for="appName" class="block text-sm font-medium text-gray-700 mb-1">Nome do App</label>
+                    <input type="text" id="appName" name="appName" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Ferramenta de Design" required>
+                </div>
+                <div class="mb-4">
+                    <label for="appUrl" class="block text-sm font-medium text-gray-700 mb-1">URL do App</label>
+                    <input type="url" id="appUrl" name="appUrl" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="./meu_app.html" required>
+                </div>
+                <div class="mb-4">
+                    <label for="appCategory" class="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                    <input type="text" id="appCategory" name="appCategory" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Trabalho, Design" required>
+                </div>
+                 <div class="mb-4">
+                    <label for="appDesc" class="block text-sm font-medium text-gray-700 mb-1">Descrição (Opcional)</label>
+                    <textarea id="appDesc" name="appDesc" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Uma breve descrição do que o app faz"></textarea>
+                </div>
+                <div class="mb-6 space-y-2">
+                    <div class="flex items-center">
+                        <input type="checkbox" id="appRequiresAuth" name="appRequiresAuth" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                        <label for="appRequiresAuth" class="ml-2 block text-sm font-medium text-gray-800">Requer Login Específico?</label>
+                    </div>
+                    <div id="appCredentialsContainer" class="hidden space-y-3 pt-3 pl-3 border-l-2 border-gray-200">
+                        <!-- Credential rows will be inserted here -->
+                        <button type="button" id="addCredentialBtn" class="text-sm text-indigo-600 hover:text-indigo-800 font-semibold flex items-center">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                           Adicionar Credencial
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end space-x-4">
+                    <button type="button" id="cancelBtn" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-colors">Salvar App</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação de Exclusão -->
+    <div id="deleteConfirmModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 invisible opacity-0">
+        <div id="deleteModalContent" class="bg-white rounded-xl shadow-2xl p-6 sm:p-8 w-11/12 max-w-md transform transition-all scale-95 opacity-0">
+            <h2 class="text-2xl font-bold mb-4">Confirmar Exclusão</h2>
+            <p id="deleteModalText" class="text-gray-600 mb-6">Você tem certeza que deseja remover este aplicativo?</p>
+            <div class="flex items-center justify-end space-x-4">
+                <button type="button" id="cancelDeleteBtn" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">Cancelar</button>
+                <button type="button" id="confirmDeleteBtn" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-colors">Excluir</button>
             </div>
         </div>
     </div>
 
+    <!-- Firebase SDKs -->
     <script type="module">
-        // Importa os módulos do Firebase expostos no objeto 'window'
-        const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, collection, addDoc, onSnapshot, query, getDocs, Timestamp, setLogLevel } = window.firebase;
-        
-        // Obtém referências para os elementos do DOM
-        const responsavelInput = document.getElementById('responsavel');
-        const codigoProdutoSelect = document.getElementById('codigoProduto');
-        const quantidadeInput = document.getElementById('quantidade');
-        
-        const iniciarBtn = document.getElementById('iniciarBtn');
-        const pausarBtn = document.getElementById('pausarBtn');
-        const finalizarBtn = document.getElementById('finalizarBtn');
-        const exportarBtn = document.getElementById('exportarBtn');
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-        const horaInicioSpan = document.getElementById('horaInicio');
-        const horaFimSpan = document.getElementById('horaFim');
-        const tempoLiquidoSpan = document.getElementById('tempoLiquido');
-        const produtividadeSpan = document.getElementById('produtividade');
-        const listaPausasUl = document.getElementById('listaPausas');
-        const historicoListaUl = document.getElementById('historicoLista');
-        const userIdDisplay = document.getElementById('userIdDisplay');
-
-        const justificativaModal = document.getElementById('justificativaModal');
-        const justificativaInput = document.getElementById('justificativaInput');
-        const salvarJustificativaBtn = document.getElementById('salvarJustificativaBtn');
-        const cancelarJustificativaBtn = document.getElementById('cancelarJustificativaBtn');
-        
-        const avisoModal = document.getElementById('avisoModal');
-        const avisoText = document.getElementById('avisoText');
-        const fecharAvisoBtn = document.getElementById('fecharAvisoBtn');
-
-        // Variáveis de estado da aplicação
-        let inicioProducao = null;
-        let inicioPausa = null;
-        let tempoTotalPausas = 0;
-        let emPausa = false;
-        let pausasRegistradas = [];
-        let db, auth, userId;
-        
-        // Variáveis globais fornecidas pelo ambiente
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // --- INÍCIO DA CONFIGURAÇÃO DO FIREBASE ---
         const firebaseConfig = {
-          apiKey: "AIzaSyBDb1E_wHtmISvNG31RhlmP979890X7nxY",
-          authDomain: "apontamentoproducao-f141e.firebaseapp.com",
-          projectId: "apontamentoproducao-f141e",
-          storageBucket: "apontamentoproducao-f141e.firebasestorage.app",
-          messagingSenderId: "516590802933",
-          appId: "1:516590802933:web:756d1e76d981e51604b2bc",
-          measurementId: "G-3ZF5SLW87S"
+            apiKey: "AIzaSyCbLj765BU-TaE0GSsC3CCsCt4Wrgf0nyU",
+            authDomain: "painel-interativo-a72ab.firebaseapp.com",
+            projectId: "painel-interativo-a72ab",
+            storageBucket: "painel-interativo-a72ab.appspot.com",
+            messagingSenderId: "934583256105",
+            appId: "1:934583256105:web:034fb795d11a5c116ac838",
+            measurementId: "G-4T3FTKT0K3"
         };
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        // Função para exibir um aviso no modal customizado
-        function showAviso(message) {
-            avisoText.textContent = message;
-            avisoModal.classList.remove('hidden');
-        }
-
-        // Função utilitária para formatar o tempo em HH:MM:SS
-        function formatarTempo(ms) {
-            const segundos = Math.floor(ms / 1000);
-            const minutos = Math.floor(segundos / 60);
-            const horas = Math.floor(minutos / 60);
-
-            const s = segundos % 60;
-            const m = minutos % 60;
-            const h = horas % 24;
-
-            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-        }
         
-        // Inicialização e Autenticação do Firebase
-        async function initializeFirebase() {
-            try {
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        userIdDisplay.textContent = userId;
-                        setupRealtimeListener();
-                    } else {
-                        userIdDisplay.textContent = 'Não autenticado';
-                    }
-                });
-
-            } catch (error) {
-                console.error("Erro ao inicializar Firebase ou autenticar:", error);
-                showAviso("Erro ao conectar com o banco de dados. Por favor, tente novamente.");
-            }
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (error) {
+            console.error("Erro na configuração do Firebase:", error);
+            alert("Erro fatal na configuração do Firebase. A aplicação não pode continuar.");
+            document.getElementById('loadingOverlay').style.display = 'none';
         }
-        
-        // Listener para o histórico de apontamentos
-        function setupRealtimeListener() {
-            if (!userId) return;
-            // Altera o caminho para um local público
-            const producoesRef = collection(db, `artifacts/${appId}/public/data/producoes`);
-            const q = query(producoesRef);
-            
-            onSnapshot(q, (snapshot) => {
-                historicoListaUl.innerHTML = '';
-                if (snapshot.empty) {
-                    historicoListaUl.innerHTML = '<li class="text-gray-500">Nenhum apontamento registrado ainda.</li>';
+        // --- FIM DA CONFIGURAÇÃO DO FIREBASE ---
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Seletores de Elementos ---
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const dashboardContainer = document.getElementById('dashboardContainer');
+            const loginModal = document.getElementById('loginModal');
+            const loginModalContent = document.getElementById('loginModalContent');
+            const loginForm = document.getElementById('loginForm');
+            const loginError = document.getElementById('loginError');
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const cancelLoginBtn = document.getElementById('cancelLoginBtn');
+            const appLoginModal = document.getElementById('appLoginModal');
+            const appLoginModalContent = document.getElementById('appLoginModalContent');
+            const appLoginForm = document.getElementById('appLoginForm');
+            const appLoginTitle = document.getElementById('appLoginTitle');
+            const appLoginError = document.getElementById('appLoginError');
+            const cancelAppLoginBtn = document.getElementById('cancelAppLoginBtn');
+            const appGrid = document.getElementById('appGrid');
+            const addAppBtn = document.getElementById('addAppBtn');
+            const emptyState = document.getElementById('emptyState');
+            const addModal = document.getElementById('addAppModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalContent = document.getElementById('modalContent');
+            const cancelBtn = document.getElementById('cancelBtn');
+            const addAppForm = document.getElementById('addAppForm');
+            const appRequiresAuth = document.getElementById('appRequiresAuth');
+            const appCredentialsContainer = document.getElementById('appCredentialsContainer');
+            const addCredentialBtn = document.getElementById('addCredentialBtn');
+            const appViewer = document.getElementById('appViewer');
+            const appViewerTitle = document.getElementById('appViewerTitle');
+            const appFrame = document.getElementById('appFrame');
+            const backToDashboardBtn = document.getElementById('backToDashboardBtn');
+            const deleteConfirmModal = document.getElementById('deleteConfirmModal');
+            const deleteModalContent = document.getElementById('deleteModalContent');
+            const deleteModalText = document.getElementById('deleteModalText');
+            const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+            const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+
+            // --- Estado da Aplicação ---
+            let apps = [];
+            let indexToDelete = null;
+            let editingAppIndex = null;
+            let appToOpenAfterLogin = null;
+            let isLoggedIn = false;
+            let userId = null; // Still useful for auth checks, just not for doc path
+            let unsubscribeFromFirestore = null;
+
+            // --- Funções de Dados (Firestore) ---
+            const saveAppsToFirestore = async () => {
+                if (!auth.currentUser) return; // Need to be authenticated to write
+                try {
+                    // CORRECTED: Use a fixed path for a shared dashboard
+                    const docRef = doc(db, "dashboards", "sharedPanel");
+                    await setDoc(docRef, { apps: apps });
+                } catch (error) {
+                    console.error("Erro ao salvar no Firestore: ", error);
+                    alert("Não foi possível salvar as alterações. Verifique sua conexão e as regras de segurança do Firestore.");
                 }
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const li = document.createElement('li');
-                    li.classList.add('p-4', 'bg-gray-100', 'rounded-lg', 'border', 'border-gray-200');
-                    li.innerHTML = `
-                        <p class="font-semibold text-gray-800">${data.responsavel} - ${data.codigoProduto}</p>
-                        <p class="text-sm text-gray-600"><strong>Quantidade:</strong> ${data.quantidade}</p>
-                        <p class="text-sm text-gray-600"><strong>Tempo Líquido:</strong> ${data.tempoLiquidoFormatado}</p>
-                        <p class="text-sm text-gray-600"><strong>Produtividade:</strong> ${data.produtividade.toFixed(2)} pçs/hora</p>
-                        <p class="text-xs italic text-gray-400">Finalizado em: ${data.dataFinalizacao.toDate().toLocaleString('pt-BR')}</p>
-                    `;
-                    historicoListaUl.appendChild(li);
-                });
-            });
-        }
-        
-        // Event listener para o botão de fechar o aviso
-        fecharAvisoBtn.addEventListener('click', () => {
-            avisoModal.classList.add('hidden');
-        });
-
-        // Event listener para o botão Iniciar Ordem
-        iniciarBtn.addEventListener('click', () => {
-            if (!responsavelInput.value || !codigoProdutoSelect.value || !quantidadeInput.value) {
-                showAviso("Por favor, preencha todos os campos antes de iniciar a ordem.");
-                return;
-            }
-
-            inicioProducao = new Date().getTime();
-            horaInicioSpan.textContent = new Date().toLocaleString('pt-BR');
-            pausasRegistradas = [];
-            tempoTotalPausas = 0;
-
-            iniciarBtn.disabled = true;
-            pausarBtn.disabled = false;
-            finalizarBtn.disabled = false;
-        });
-
-        // Event listener para o botão Pausar/Continuar
-        pausarBtn.addEventListener('click', () => {
-            if (!emPausa) {
-                justificativaModal.classList.remove('hidden');
-            } else {
-                const fimPausa = new Date().getTime();
-                const duracaoPausa = fimPausa - inicioPausa;
-                tempoTotalPausas += duracaoPausa;
-                
-                // Adiciona o tempo final da última pausa registrada
-                if(pausasRegistradas.length > 0) {
-                    pausasRegistradas[pausasRegistradas.length - 1].fimPausa = fimPausa;
-                }
-
-                emPausa = false;
-                pausarBtn.textContent = 'Pausar';
-                pausarBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
-                pausarBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
-                
-                const lastPauseItem = listaPausasUl.lastElementChild;
-                if (lastPauseItem) {
-                    lastPauseItem.innerHTML += `<br><span class="text-sm italic text-gray-500">Retorno: ${new Date(fimPausa).toLocaleString('pt-BR')}</span>`;
-                }
-            }
-        });
-
-        // Event listener para o botão Salvar Justificativa (do modal)
-        salvarJustificativaBtn.addEventListener('click', () => {
-            const justificativa = justificativaInput.value;
-            if (justificativa.trim() === '') {
-                showAviso("A justificativa não pode estar vazia.");
-                return;
-            }
-
-            inicioPausa = new Date().getTime();
-            emPausa = true;
-            pausarBtn.textContent = 'Continuar';
-            pausarBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
-            pausarBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-
-            // Adiciona a pausa à lista local e visual
-            pausasRegistradas.push({ inicioPausa: inicioPausa, justificativa });
-            const li = document.createElement('li');
-            li.innerHTML = `Pausa: ${justificativa} - <span class="text-sm italic text-gray-500">Início: ${new Date(inicioPausa).toLocaleString('pt-BR')}</span>`;
-            listaPausasUl.appendChild(li);
-
-            justificativaInput.value = '';
-            justificativaModal.classList.add('hidden');
-        });
-
-        // Event listener para o botão Cancelar Justificativa (do modal)
-        cancelarJustificativaBtn.addEventListener('click', () => {
-            justificativaInput.value = '';
-            justificativaModal.classList.add('hidden');
-        });
-
-        // Event listener para o botão Finalizar Ordem
-        finalizarBtn.addEventListener('click', async () => {
-            if (!inicioProducao) {
-                showAviso("A ordem ainda não foi iniciada.");
-                return;
-            }
-            if (!userId) {
-                showAviso("Aguarde a autenticação do usuário antes de finalizar.");
-                return;
-            }
-
-            if (emPausa) {
-                const fimPausa = new Date().getTime();
-                const duracaoPausa = fimPausa - inicioPausa;
-                tempoTotalPausas += duracaoPausa;
-                emPausa = false;
-                if(pausasRegistradas.length > 0) {
-                    pausasRegistradas[pausasRegistradas.length - 1].fimPausa = fimPausa;
-                }
-            }
-
-            const fimProducao = new Date().getTime();
-            horaFimSpan.textContent = new Date(fimProducao).toLocaleString('pt-BR');
-
-            const tempoBruto = fimProducao - inicioProducao;
-            const tempoLiquido = tempoBruto - tempoTotalPausas;
-            const tempoLiquidoFormatado = formatarTempo(tempoLiquido);
-            tempoLiquidoSpan.textContent = tempoLiquidoFormatado;
-
-            const quantidade = parseFloat(quantidadeInput.value);
-            const tempoLiquidoEmHoras = tempoLiquido / (1000 * 60 * 60);
-            const produtividade = tempoLiquidoEmHoras > 0 ? quantidade / tempoLiquidoEmHoras : 0;
-            produtividadeSpan.textContent = `${produtividade.toFixed(2)} peças/hora`;
-
-            const producaoData = {
-                responsavel: responsavelInput.value,
-                codigoProduto: codigoProdutoSelect.value,
-                quantidade: quantidade,
-                dataInicio: Timestamp.fromMillis(inicioProducao),
-                dataFim: Timestamp.fromMillis(fimProducao),
-                tempoLiquidoMs: tempoLiquido,
-                tempoLiquidoFormatado: tempoLiquidoFormatado,
-                produtividade: produtividade,
-                pausas: pausasRegistradas.map(p => ({
-                    justificativa: p.justificativa,
-                    inicioPausa: Timestamp.fromMillis(p.inicioPausa),
-                    fimPausa: p.fimPausa ? Timestamp.fromMillis(p.fimPausa) : null,
-                })),
-                dataFinalizacao: Timestamp.now()
             };
 
-            try {
-                // Altera o caminho para um local público
-                const docRef = await addDoc(collection(db, `artifacts/${appId}/public/data/producoes`), producaoData);
-                console.log("Documento escrito com ID: ", docRef.id);
-            } catch (e) {
-                console.error("Erro ao adicionar documento: ", e);
-                showAviso("Erro ao salvar os dados. Verifique a conexão.");
-            }
-
-            iniciarBtn.disabled = false;
-            pausarBtn.disabled = true;
-            finalizarBtn.disabled = true;
-            pausarBtn.textContent = 'Pausar';
-            pausarBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
-            pausarBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
-            
-            inicioProducao = null;
-            inicioPausa = null;
-            tempoTotalPausas = 0;
-            emPausa = false;
-            pausasRegistradas = [];
-
-            responsavelInput.value = '';
-            codigoProdutoSelect.value = '';
-            quantidadeInput.value = '';
-            listaPausasUl.innerHTML = '';
-        });
-        
-        // Event listener para o botão de exportar
-        exportarBtn.addEventListener('click', async () => {
-            if (!userId) {
-                showAviso("Aguarde a autenticação do usuário para exportar os dados.");
-                return;
-            }
-            
-            try {
-                // Altera o caminho para um local público
-                const producoesRef = collection(db, `artifacts/${appId}/public/data/producoes`);
-                const snapshot = await getDocs(producoesRef);
+            const setupFirestoreListener = () => {
+                // CORRECTED: Use a fixed path for a shared dashboard
+                const docRef = doc(db, "dashboards", "sharedPanel");
                 
-                if (snapshot.empty) {
-                    showAviso("Não há dados para exportar.");
-                    return;
+                if (unsubscribeFromFirestore) unsubscribeFromFirestore();
+                
+                unsubscribeFromFirestore = onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists() && docSnap.data().apps) {
+                        apps = docSnap.data().apps;
+                    } else {
+                        // If the shared document doesn't exist, create it with default data
+                        apps = [
+                            { name: 'Módulo de Estoque', url: './mrp_estoque.html', description: 'Sistema de gerenciamento de estoque (MRP).', category: 'Trabalho', requiresAuth: true, credentials: [{user: 'wellinton', pass: '123'}, {user: 'admin', pass: 'admin'}] },
+                            { name: 'Figma', url: 'https://figma.com', description: 'Ferramenta de design colaborativo.', category: 'Design', requiresAuth: false, credentials: [] },
+                        ];
+                        saveAppsToFirestore(); // Save the initial data for everyone
+                    }
+                    renderApps();
+                    
+                    loadingOverlay.classList.add('opacity-0');
+                    setTimeout(() => {
+                        loadingOverlay.classList.add('hidden');
+                        dashboardContainer.classList.remove('invisible');
+                    }, 300);
+                }, (error) => {
+                    console.error("Erro ao ouvir dados do Firestore:", error);
+                    alert("Não foi possível carregar os dados. Verifique as regras de segurança do seu projeto Firebase. Para um painel compartilhado, as regras precisam permitir leitura/escrita para usuários autenticados.");
+                    loadingOverlay.style.display = 'none';
+                });
+            };
+
+            const renderApps = () => {
+                appGrid.innerHTML = ''; 
+                if (apps.length === 0) {
+                    emptyState.classList.remove('hidden');
+                    appGrid.className = '';
+                } else {
+                    emptyState.classList.add('hidden');
+                    appGrid.className = 'space-y-12';
+
+                    const appsByCategory = apps.reduce((acc, app) => {
+                        const category = app.category || 'Sem Categoria';
+                        if (!acc[category]) { acc[category] = []; }
+                        acc[category].push(app);
+                        return acc;
+                    }, {});
+
+                    const sortedCategories = Object.keys(appsByCategory).sort();
+
+                    sortedCategories.forEach(category => {
+                        const categorySection = document.createElement('section');
+                        const categoryTitle = document.createElement('h2');
+                        categoryTitle.className = 'text-2xl font-bold text-gray-800 mb-4 capitalize';
+                        categoryTitle.textContent = category;
+                        categorySection.appendChild(categoryTitle);
+
+                        const categoryGrid = document.createElement('div');
+                        categoryGrid.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6';
+
+                        appsByCategory[category].forEach((app) => {
+                            const index = apps.findIndex(originalApp => originalApp.name === app.name && originalApp.url === app.url && originalApp.category === app.category);
+                            if (index === -1) return; // Skip if not found in global array
+                            const firstLetter = app.name.charAt(0).toUpperCase();
+                            const card = document.createElement('div');
+                            card.className = "app-card bg-white rounded-xl shadow-sm overflow-hidden flex flex-col group relative";
+                            card.innerHTML = `
+                                <a href="${app.url}" data-index="${index}" data-name="${app.name}" class="app-link flex-grow p-4 flex flex-col items-center justify-center text-center cursor-pointer min-h-32">
+                                    <div class="flex-shrink-0 h-12 w-12 flex items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 font-bold text-xl mb-3">${firstLetter}</div>
+                                    <p class="text-base font-semibold text-gray-800 w-full px-2">${app.name}</p>
+                                </a>
+                                <button data-index="${index}" class="edit-btn absolute top-2 right-10 h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-gray-500 opacity-0 group-hover:opacity-100 hover:bg-blue-500 hover:text-white transition-all scale-75 group-hover:scale-100" title="Editar App">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <button data-index="${index}" class="delete-btn absolute top-2 right-2 h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-gray-500 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all scale-75 group-hover:scale-100" title="Remover App">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            `;
+                            categoryGrid.appendChild(card);
+                        });
+                        categorySection.appendChild(categoryGrid);
+                        appGrid.appendChild(categorySection);
+                    });
+                }
+            };
+            
+            // --- Funções de Modal ---
+            const openAddModal = () => {
+                editingAppIndex = null;
+                modalTitle.textContent = "Adicionar Aplicativo";
+                addAppForm.reset();
+                appCredentialsContainer.innerHTML = '';
+                appCredentialsContainer.appendChild(addCredentialBtn);
+                appCredentialsContainer.classList.add('hidden');
+                addModal.classList.remove('invisible', 'opacity-0');
+                modalContent.classList.remove('scale-95', 'opacity-0');
+            };
+
+            const openAddModalForEdit = (index) => {
+                editingAppIndex = index;
+                const app = apps[index];
+                modalTitle.textContent = "Editar Aplicativo";
+                addAppForm.appName.value = app.name;
+                addAppForm.appUrl.value = app.url;
+                addAppForm.appCategory.value = app.category;
+                addAppForm.appDesc.value = app.description || '';
+                appRequiresAuth.checked = app.requiresAuth;
+                appCredentialsContainer.innerHTML = '';
+                if (app.requiresAuth) {
+                    appCredentialsContainer.classList.remove('hidden');
+                    if(app.credentials && app.credentials.length > 0) {
+                        app.credentials.forEach(cred => addCredentialRow(cred.user, cred.pass));
+                    }
+                } else {
+                    appCredentialsContainer.classList.add('hidden');
+                }
+                appCredentialsContainer.appendChild(addCredentialBtn);
+                addModal.classList.remove('invisible', 'opacity-0');
+                modalContent.classList.remove('scale-95', 'opacity-0');
+            };
+
+            const closeAddModal = () => {
+                modalContent.classList.add('scale-95', 'opacity-0');
+                addModal.classList.add('opacity-0');
+                setTimeout(() => {
+                    addModal.classList.add('invisible');
+                    addAppForm.reset();
+                    editingAppIndex = null;
+                }, 300);
+            };
+
+            const openAppLoginModal = (index) => {
+                appToOpenAfterLogin = index;
+                appLoginTitle.textContent = `Acesso para "${apps[index].name}"`;
+                appLoginModal.classList.remove('invisible', 'opacity-0');
+                appLoginModalContent.classList.remove('scale-95', 'opacity-0');
+            };
+
+            const closeAppLoginModal = () => {
+                appLoginModalContent.classList.add('scale-95', 'opacity-0');
+                appLoginModal.classList.add('opacity-0');
+                setTimeout(() => {
+                    appLoginModal.classList.add('invisible');
+                    appLoginForm.reset();
+                    appLoginError.textContent = '';
+                    appToOpenAfterLogin = null;
+                }, 300);
+            };
+            
+            const openDeleteModal = (index) => {
+                indexToDelete = index;
+                deleteModalText.textContent = `Você tem certeza que deseja remover o aplicativo "${apps[index].name}"?`;
+                deleteConfirmModal.classList.remove('invisible', 'opacity-0');
+                deleteModalContent.classList.remove('scale-95', 'opacity-0');
+            };
+
+            const closeDeleteModal = () => {
+                deleteModalContent.classList.add('scale-95', 'opacity-0');
+                deleteConfirmModal.classList.add('opacity-0');
+                setTimeout(() => {
+                    deleteConfirmModal.classList.add('invisible');
+                    indexToDelete = null;
+                }, 300);
+            };
+
+            const openLoginModal = () => {
+                loginModal.classList.remove('invisible', 'opacity-0');
+                loginModalContent.classList.remove('scale-95', 'opacity-0');
+            };
+
+            const closeLoginModal = () => {
+                loginModalContent.classList.add('scale-95', 'opacity-0');
+                loginModal.classList.add('opacity-0');
+                setTimeout(() => {
+                    loginModal.classList.add('invisible');
+                    loginError.textContent = '';
+                    loginForm.reset();
+                }, 300);
+            };
+            
+            const addCredentialRow = (user = '', pass = '') => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center space-x-2 credential-row';
+                row.innerHTML = `
+                    <input type="text" value="${user}" class="w-full px-2 py-1 border border-gray-300 rounded-md text-sm app-cred-user" placeholder="Usuário" required>
+                    <input type="text" value="${pass}" class="w-full px-2 py-1 border border-gray-300 rounded-md text-sm app-cred-pass" placeholder="Senha" required>
+                    <button type="button" class="remove-cred-btn flex-shrink-0 h-7 w-7 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-red-500 hover:text-white transition-colors">
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                `;
+                addCredentialBtn.before(row);
+                row.querySelector('.remove-cred-btn').addEventListener('click', () => row.remove());
+            };
+            
+            // --- Funções de Manipulação de Eventos ---
+            const handleFormSubmit = (e) => {
+                e.preventDefault();
+                const newApp = {
+                    name: e.target.appName.value.trim(),
+                    url: e.target.appUrl.value.trim(),
+                    category: e.target.appCategory.value.trim(),
+                    description: e.target.appDesc.value.trim(),
+                    requiresAuth: e.target.appRequiresAuth.checked,
+                    credentials: []
+                };
+
+                if (newApp.requiresAuth) {
+                    document.querySelectorAll('.credential-row').forEach(row => {
+                        const user = row.querySelector('.app-cred-user').value.trim();
+                        const pass = row.querySelector('.app-cred-pass').value.trim();
+                        if (user && pass) {
+                            newApp.credentials.push({ user, pass });
+                        }
+                    });
                 }
                 
-                let csv = 'Responsavel,Codigo do Produto,Quantidade,Data de Inicio,Hora de Inicio,Data de Fim,Hora de Fim,Tempo Liquido,Produtividade,Pausas (Motivo),Pausas (Duracao)\n';
+                if (editingAppIndex !== null) {
+                    apps[editingAppIndex] = newApp;
+                } else {
+                    apps.push(newApp);
+                }
                 
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    
-                    const dataInicio = data.dataInicio.toDate();
-                    const dataInicioStr = dataInicio.toLocaleDateString('pt-BR');
-                    const horaInicioStr = dataInicio.toLocaleTimeString('pt-BR');
-                    
-                    const dataFim = data.dataFim.toDate();
-                    const dataFimStr = dataFim.toLocaleDateString('pt-BR');
-                    const horaFimStr = dataFim.toLocaleTimeString('pt-BR');
+                saveAppsToFirestore();
+                closeAddModal();
+            };
+            
+            const launchApp = (index) => {
+                const app = apps[index];
+                appViewerTitle.textContent = app.name;
+                appFrame.src = app.url;
+                dashboardContainer.classList.add('hidden');
+                appViewer.classList.remove('invisible', 'opacity-0');
+            };
 
-                    const motivosPausas = data.pausas.map(p => p.justificativa).join('; ');
-                    const duracoesPausas = data.pausas.map(p => {
-                        const inicio = p.inicioPausa.toDate();
-                        const fim = p.fimPausa ? p.fimPausa.toDate() : data.dataFim.toDate();
-                        return formatarTempo(fim - inicio);
-                    }).join('; ');
-                    
-                    csv += `"${data.responsavel}","${data.codigoProduto}",${data.quantidade},"${dataInicioStr}","${horaInicioStr}","${dataFimStr}","${horaFimStr}","${data.tempoLiquidoFormatado}",${data.produtividade.toFixed(2)},"${motivosPausas}","${duracoesPausas}"\n`;
+            const handleGridClick = (e) => {
+                const deleteButton = e.target.closest('.delete-btn');
+                const editButton = e.target.closest('.edit-btn');
+                const appLink = e.target.closest('.app-link');
+
+                if (deleteButton) {
+                    e.preventDefault();
+                    if (isLoggedIn) openDeleteModal(parseInt(deleteButton.dataset.index, 10));
+                    return;
+                }
+                if (editButton) {
+                    e.preventDefault();
+                    if (isLoggedIn) openAddModalForEdit(parseInt(editButton.dataset.index, 10));
+                    return;
+                }
+                if (appLink) {
+                    e.preventDefault();
+                    const index = parseInt(appLink.dataset.index, 10);
+                    const app = apps[index];
+                    if (app.requiresAuth) {
+                        openAppLoginModal(index);
+                    } else {
+                        launchApp(index);
+                    }
+                }
+            };
+
+            const handleBackToDashboard = () => {
+                appViewer.classList.add('invisible', 'opacity-0');
+                dashboardContainer.classList.remove('hidden');
+                appFrame.src = 'about:blank';
+                appViewerTitle.textContent = '';
+            };
+            
+            const handleDeleteConfirm = () => {
+                if (indexToDelete !== null) {
+                    apps.splice(indexToDelete, 1);
+                    saveAppsToFirestore();
+                    closeDeleteModal();
+                }
+            };
+            
+            const handleAppLoginSubmit = (e) => {
+                e.preventDefault();
+                const app = apps[appToOpenAfterLogin];
+                const username = e.target.appUsername.value;
+                const password = e.target.appPassword.value;
+                const isValid = app.credentials.some(cred => cred.user === username && cred.pass === password);
+
+                if (isValid) {
+                    closeAppLoginModal();
+                    launchApp(appToOpenAfterLogin);
+                } else {
+                    appLoginError.textContent = "Usuário ou senha inválidos para este app.";
+                }
+            };
+
+
+            // --- Lógica de Login/Logout ---
+            const updateLoginStateUI = () => { document.body.classList.toggle('logged-in', isLoggedIn); };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (loginForm.username.value === 'Wellinton' && loginForm.password.value === 'Wellinton7842') {
+                    isLoggedIn = true;
+                    sessionStorage.setItem('isUserLoggedIn', 'true');
+                    updateLoginStateUI();
+                    closeLoginModal();
+                } else {
+                    loginError.textContent = 'Usuário ou senha inválidos.';
+                }
+            };
+
+            const handleLogout = () => {
+                isLoggedIn = false;
+                sessionStorage.removeItem('isUserLoggedIn');
+                updateLoginStateUI();
+            };
+
+            // --- Event Listeners ---
+            loginBtn.addEventListener('click', openLoginModal);
+            logoutBtn.addEventListener('click', handleLogout);
+            loginForm.addEventListener('submit', handleLogin);
+            cancelLoginBtn.addEventListener('click', closeLoginModal);
+            loginModal.addEventListener('click', (e) => { if (e.target === loginModal) closeLoginModal(); });
+
+            appLoginForm.addEventListener('submit', handleAppLoginSubmit);
+            cancelAppLoginBtn.addEventListener('click', closeAppLoginModal);
+            appLoginModal.addEventListener('click', (e) => { if (e.target === appLoginModal) closeAppLoginModal(); });
+            
+            addAppBtn.addEventListener('click', openAddModal);
+            cancelBtn.addEventListener('click', closeAddModal);
+            addModal.addEventListener('click', (e) => { if (e.target === addModal) closeAddModal(); });
+            addAppForm.addEventListener('submit', handleFormSubmit);
+            
+            appRequiresAuth.addEventListener('change', () => appCredentialsContainer.classList.toggle('hidden', !appRequiresAuth.checked));
+            addCredentialBtn.addEventListener('click', () => addCredentialRow());
+            
+            appGrid.addEventListener('click', handleGridClick);
+            backToDashboardBtn.addEventListener('click', handleBackToDashboard);
+
+            cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+            confirmDeleteBtn.addEventListener('click', handleDeleteConfirm);
+            deleteConfirmModal.addEventListener('click', (e) => { if (e.target === deleteConfirmModal) closeDeleteModal(); });
+
+            // --- Inicialização com Firebase ---
+            const initializeApp = async () => {
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid; // Save the user's ID
+                        setupFirestoreListener(); // Setup listener for the shared document
+                        isLoggedIn = sessionStorage.getItem('isUserLoggedIn') === 'true';
+                        updateLoginStateUI();
+                    }
                 });
                 
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.setAttribute('href', url);
-                a.setAttribute('download', 'historico_apontamentos.csv');
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                showAviso("Histórico exportado com sucesso!");
-                
-            } catch (error) {
-                console.error("Erro ao exportar dados:", error);
-                showAviso("Erro ao exportar dados. Tente novamente.");
+                if (!auth.currentUser) {
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Erro no login anônimo:", error);
+                        alert("Não foi possível conectar ao serviço. Tente recarregar a página.");
+                    }
+                }
+            };
+            
+            if (db) {
+                initializeApp();
             }
         });
-        
-        // Inicia a aplicação
-        initializeFirebase();
     </script>
 </body>
 </html>
+
