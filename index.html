@@ -3,673 +3,659 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Aplicativos Interativo</title>
-    
-    <!-- Tailwind CSS -->
+    <title>Controle de Produtividade</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google Fonts: Inter -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f0f2f5;
         }
-        #addAppModal, #appViewer, #deleteConfirmModal, #loginModal, #appLoginModal {
-            transition: opacity 0.3s ease, visibility 0.3s ease;
+        .tab-active {
+            background-color: #4f46e5;
+            color: white;
         }
-        .app-card {
-            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        .tab-inactive {
+            background-color: #374151;
+            color: #d1d5db;
         }
-        .app-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
         }
-        #appFrame {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-        /* Controle de visibilidade com base no login */
-        #addAppBtn, #logoutBtn, .delete-btn, .edit-btn { display: none; }
-        #loginBtn { display: flex; }
-
-        body.logged-in #addAppBtn,
-        body.logged-in #logoutBtn,
-        body.logged-in .delete-btn,
-        body.logged-in .edit-btn {
-            display: flex;
-        }
-        body.logged-in #loginBtn {
-            display: none;
-        }
-
-        /* Loading Spinner */
-        #loadingOverlay {
-            transition: opacity 0.3s ease;
-        }
-        .spinner {
-            border-top-color: #4f46e5;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        @media print {
+            body {
+                background-color: white !important;
+                color: black !important;
+                font-size: 10pt;
+            }
+            .no-print {
+                display: none !important;
+            }
+            main > div.hidden {
+                display: none !important;
+            }
+            main > div {
+                display: block !important;
+            }
+            .bg-gray-800, .bg-gray-900 {
+                background-color: transparent !important;
+                box-shadow: none !important;
+                border: 1px solid #e5e7eb;
+            }
+            .text-white, .text-gray-200, .text-gray-300, .text-gray-400, .text-gray-300, .text-xs {
+                color: black !important;
+            }
+            .text-red-400 { color: #dc2626 !important; }
+            .text-yellow-400 { color: #f59e0b !important; }
+            .text-green-400 { color: #10b981 !important; }
+            .border-gray-700 { border-color: #e5e7eb !important; }
+            .table-container {
+                max-height: none;
+                overflow: visible;
+            }
+            .grid, .bg-gray-800 {
+                page-break-inside: avoid;
+            }
+            canvas {
+                max-width: 100% !important;
+            }
         }
     </style>
 </head>
-<body class="antialiased text-gray-800">
+<body class="bg-gray-900 text-gray-200">
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-white">
-        <div class="spinner h-12 w-12 rounded-full border-4 border-t-4 border-gray-200"></div>
-    </div>
-
-
-    <!-- Container do Painel Principal -->
-    <div id="dashboardContainer" class="min-h-screen p-4 sm:p-6 lg:p-8 invisible">
-        <div class="max-w-7xl mx-auto">
-            <header class="flex flex-col sm:flex-row items-center justify-between mb-8">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Meu Painel de Controle</h1>
-                    <p class="text-gray-500 mt-1">Acesse seus aplicativos em um só lugar.</p>
-                </div>
-                <div class="flex items-center space-x-4 mt-4 sm:mt-0">
-                     <button id="addAppBtn" class="w-full sm:w-auto items-center justify-center px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
-                        Adicionar Novo App
-                    </button>
-                    <button id="loginBtn" class="w-full sm:w-auto items-center justify-center px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
-                        Login
-                    </button>
-                    <button id="logoutBtn" class="w-full sm:w-auto items-center justify-center px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        Sair
-                    </button>
-                </div>
-            </header>
-            <main>
-                <div id="appGrid">
-                    <!-- Categorias e cartões de aplicativo aqui -->
-                </div>
-                <p id="emptyState" class="hidden text-center text-gray-500 mt-16 text-lg">Seu painel está vazio. Clique em "Adicionar Novo App" para começar!</p>
-            </main>
-        </div>
-    </div>
-
-    <!-- Container do Visualizador de App (com iframe) -->
-    <div id="appViewer" class="fixed inset-0 z-40 flex flex-col bg-white invisible opacity-0">
-        <header class="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-            <h2 id="appViewerTitle" class="text-xl font-bold text-gray-800"></h2>
-            <button id="backToDashboardBtn" class="flex items-center px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
-                Voltar ao Painel
-            </button>
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Controle de Produtividade</h1>
+            <p class="text-gray-400 mt-2">Cadastre suas atividades e registre seus lançamentos para acompanhar o desempenho.</p>
         </header>
-        <div class="flex-grow overflow-hidden">
-            <iframe id="appFrame" title="Visualizador de Aplicativo"></iframe>
-        </div>
-    </div>
 
-    <!-- Modals (Login, Add/Edit, Delete, App Login) -->
-    <!-- Modal de Login Principal -->
-    <div id="loginModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 invisible opacity-0">
-        <div id="loginModalContent" class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md transform transition-all scale-95 opacity-0">
-            <h1 class="text-3xl font-bold text-center text-gray-900 mb-6">Login</h1>
-            <form id="loginForm" class="space-y-6">
-                <div>
-                    <label for="username" class="text-sm font-medium text-gray-700">Usuário</label>
-                    <input id="username" name="username" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Digite seu usuário">
-                </div>
-                <div>
-                    <label for="password" class="text-sm font-medium text-gray-700">Senha</label>
-                    <input id="password" name="password" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Digite sua senha">
-                </div>
-                <p id="loginError" class="text-sm text-center text-red-600 h-4"></p>
-                <div class="flex items-center justify-end space-x-4">
-                     <button type="button" id="cancelLoginBtn" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-colors">
-                        Entrar
-                    </button>
-                </div>
-            </form>
+        <!-- Botão de Impressão -->
+        <div class="flex justify-end mb-4 no-print">
+            <button id="btn-imprimir" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd" />
+                </svg>
+                Imprimir Página
+            </button>
         </div>
-    </div>
 
-    <!-- Modal de Login do App Específico -->
-    <div id="appLoginModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 invisible opacity-0">
-        <div id="appLoginModalContent" class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md transform transition-all scale-95 opacity-0">
-            <h1 id="appLoginTitle" class="text-2xl font-bold text-center text-gray-900 mb-6">Acesso Restrito</h1>
-            <form id="appLoginForm" class="space-y-6">
-                <div>
-                    <label for="appUsername" class="text-sm font-medium text-gray-700">Usuário do App</label>
-                    <input id="appUsername" name="appUsername" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Digite o usuário">
-                </div>
-                <div>
-                    <label for="appPassword" class="text-sm font-medium text-gray-700">Senha do App</label>
-                    <input id="appPassword" name="appPassword" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Digite a senha">
-                </div>
-                <p id="appLoginError" class="text-sm text-center text-red-600 h-4"></p>
-                <div class="flex items-center justify-end space-x-4">
-                     <button type="button" id="cancelAppLoginBtn" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-colors">
-                        Acessar
-                    </button>
-                </div>
-            </form>
+
+        <!-- Abas de Navegação -->
+        <div class="flex justify-center mb-8 space-x-2 md:space-x-4 no-print">
+            <button id="tab-lancamentos" class="py-2 px-4 rounded-md font-semibold transition-colors duration-300 tab-active">Lançamentos</button>
+            <button id="tab-cadastros" class="py-2 px-4 rounded-md font-semibold transition-colors duration-300 tab-inactive">Cadastros</button>
+            <button id="tab-dashboards" class="py-2 px-4 rounded-md font-semibold transition-colors duration-300 tab-inactive">Dashboards</button>
         </div>
-    </div>
 
-    <!-- Modal para Adicionar/Editar App -->
-    <div id="addAppModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 invisible opacity-0 overflow-y-auto p-4">
-        <div id="modalContent" class="bg-white rounded-xl shadow-2xl p-6 sm:p-8 w-11/12 max-w-lg transform transition-all scale-95 opacity-0 my-8">
-            <h2 id="modalTitle" class="text-2xl font-bold mb-6">Adicionar Aplicativo</h2>
-            <form id="addAppForm">
-                <div class="mb-4">
-                    <label for="appName" class="block text-sm font-medium text-gray-700 mb-1">Nome do App</label>
-                    <input type="text" id="appName" name="appName" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Ferramenta de Design" required>
+        <!-- Conteúdo Principal -->
+        <main>
+            <!-- Seção de Lançamentos -->
+            <div id="content-lancamentos">
+                <div class="bg-gray-800 p-6 rounded-lg shadow-lg no-print">
+                    <h2 class="text-2xl font-bold mb-6 text-white border-b border-gray-700 pb-2">Novo Lançamento</h2>
+                    <form id="form-lancamento" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div>
+                            <label for="data" class="block mb-2 text-sm font-medium text-gray-300">Data</label>
+                            <input type="date" id="data" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                        </div>
+                        <div>
+                            <label for="hora-inicial" class="block mb-2 text-sm font-medium text-gray-300">Hora Inicial</label>
+                            <input type="time" id="hora-inicial" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                        </div>
+                        <div>
+                            <label for="hora-final" class="block mb-2 text-sm font-medium text-gray-300">Hora Final</label>
+                            <input type="time" id="hora-final" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                        </div>
+                         <div>
+                            <label for="atividade-lancamento" class="block mb-2 text-sm font-medium text-gray-300">Atividade</label>
+                            <select id="atividade-lancamento" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                                <option value="">Selecione uma atividade</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="funcionario-lancamento" class="block mb-2 text-sm font-medium text-gray-300">Funcionário Responsável</label>
+                            <select id="funcionario-lancamento" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                                <option value="">Selecione um funcionário</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="transportadora-lancamento" class="block mb-2 text-sm font-medium text-gray-300">Transportadora</label>
+                            <select id="transportadora-lancamento" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                                <option value="">Selecione uma transportadora</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="quantidade" class="block mb-2 text-sm font-medium text-gray-300">Quantidade</label>
+                            <input type="number" id="quantidade" placeholder="Ex: 150" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                        </div>
+                        <div>
+                            <label for="pausa" class="block mb-2 text-sm font-medium text-gray-300">Pausa (minutos)</label>
+                            <input type="number" id="pausa" placeholder="Ex: 15" value="0" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                        </div>
+                         <div>
+                            <label for="motivo-pausa" class="block mb-2 text-sm font-medium text-gray-300">Motivo da Pausa</label>
+                            <input type="text" id="motivo-pausa" placeholder="Ex: Almoço, café" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="md:col-span-2 lg:col-span-3">
+                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">Adicionar Lançamento</button>
+                        </div>
+                    </form>
                 </div>
-                <div class="mb-4">
-                    <label for="appUrl" class="block text-sm font-medium text-gray-700 mb-1">URL do App</label>
-                    <input type="url" id="appUrl" name="appUrl" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="./meu_app.html" required>
-                </div>
-                <div class="mb-4">
-                    <label for="appCategory" class="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-                    <input type="text" id="appCategory" name="appCategory" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Trabalho, Design" required>
-                </div>
-                 <div class="mb-4">
-                    <label for="appDesc" class="block text-sm font-medium text-gray-700 mb-1">Descrição (Opcional)</label>
-                    <textarea id="appDesc" name="appDesc" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Uma breve descrição do que o app faz"></textarea>
-                </div>
-                <div class="mb-6 space-y-2">
-                    <div class="flex items-center">
-                        <input type="checkbox" id="appRequiresAuth" name="appRequiresAuth" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                        <label for="appRequiresAuth" class="ml-2 block text-sm font-medium text-gray-800">Requer Login Específico?</label>
+
+                <div class="mt-10 bg-gray-800 p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-bold mb-4 text-white">Histórico de Lançamentos</h2>
+                    <div class="table-container">
+                        <table class="w-full text-sm text-left text-gray-300">
+                            <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
+                                <tr>
+                                    <th scope="col" class="py-3 px-6">Data</th>
+                                    <th scope="col" class="py-3 px-6">Funcionário</th>
+                                    <th scope="col" class="py-3 px-6">Atividade</th>
+                                    <th scope="col" class="py-3 px-6">Qtd.</th>
+                                    <th scope="col" class="py-3 px-6">Pausa (min)</th>
+                                    <th scope="col" class="py-3 px-6">Tempo Líquido</th>
+                                    <th scope="col" class="py-3 px-6">Produção/Hr</th>
+                                    <th scope="col" class="py-3 px-6">Meta/Hr</th>
+                                    <th scope="col" class="py-3 px-6">% Atingido</th>
+                                    <th scope="col" class="py-3 px-6 no-print">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-lancamentos">
+                                <!-- Linhas de lançamento serão inseridas aqui -->
+                            </tbody>
+                        </table>
                     </div>
-                    <div id="appCredentialsContainer" class="hidden space-y-3 pt-3 pl-3 border-l-2 border-gray-200">
-                        <!-- Credential rows will be inserted here -->
-                        <button type="button" id="addCredentialBtn" class="text-sm text-indigo-600 hover:text-indigo-800 font-semibold flex items-center">
-                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
-                           Adicionar Credencial
-                        </button>
-                    </div>
                 </div>
-                <div class="flex items-center justify-end space-x-4">
-                    <button type="button" id="cancelBtn" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-colors">Salvar App</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal de Confirmação de Exclusão -->
-    <div id="deleteConfirmModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 invisible opacity-0">
-        <div id="deleteModalContent" class="bg-white rounded-xl shadow-2xl p-6 sm:p-8 w-11/12 max-w-md transform transition-all scale-95 opacity-0">
-            <h2 class="text-2xl font-bold mb-4">Confirmar Exclusão</h2>
-            <p id="deleteModalText" class="text-gray-600 mb-6">Você tem certeza que deseja remover este aplicativo?</p>
-            <div class="flex items-center justify-end space-x-4">
-                <button type="button" id="cancelDeleteBtn" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors">Cancelar</button>
-                <button type="button" id="confirmDeleteBtn" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-colors">Excluir</button>
             </div>
-        </div>
+            
+            <!-- Seção de Cadastros Gerais -->
+            <div id="content-cadastros" class="hidden">
+                 <!-- Cadastro de Atividades -->
+                <div class="mb-12">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div class="bg-gray-800 p-6 rounded-lg shadow-lg no-print">
+                            <h2 class="text-2xl font-bold mb-6 text-white border-b border-gray-700 pb-2">Nova Atividade</h2>
+                            <form id="form-atividade">
+                                <div class="mb-4">
+                                    <label for="nome-atividade" class="block mb-2 text-sm font-medium text-gray-300">Nome da Atividade</label>
+                                    <input type="text" id="nome-atividade" placeholder="Ex: Separação de Pedidos" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                                </div>
+                                <div class="mb-6">
+                                    <label for="meta-atividade" class="block mb-2 text-sm font-medium text-gray-300">Meta (peças/hora)</label>
+                                    <input type="number" id="meta-atividade" placeholder="Ex: 100" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                                </div>
+                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">Salvar Atividade</button>
+                            </form>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                            <h2 class="text-2xl font-bold mb-4 text-white">Atividades Cadastradas</h2>
+                            <div class="table-container">
+                                <table class="w-full text-sm text-left text-gray-300">
+                                    <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
+                                        <tr>
+                                            <th scope="col" class="py-3 px-6">Nome</th>
+                                            <th scope="col" class="py-3 px-6">Meta/Hr</th>
+                                            <th scope="col" class="py-3 px-6 no-print">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tabela-atividades"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-8 border-gray-700">
+
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Cadastro de Funcionários -->
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                        <div class="no-print">
+                            <h2 class="text-2xl font-bold mb-6 text-white border-b border-gray-700 pb-2">Cadastro de Funcionários</h2>
+                            <form id="form-funcionario">
+                                <div class="mb-4">
+                                    <label for="nome-funcionario" class="block mb-2 text-sm font-medium text-gray-300">Nome do Funcionário</label>
+                                    <input type="text" id="nome-funcionario" placeholder="Ex: João da Silva" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                                </div>
+                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">Salvar Funcionário</button>
+                            </form>
+                        </div>
+                        <div class="mt-6 table-container">
+                             <h2 class="text-2xl font-bold mb-4 text-white print:mt-0">Funcionários Cadastrados</h2>
+                            <table class="w-full text-sm text-left text-gray-300">
+                                <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
+                                    <tr>
+                                        <th scope="col" class="py-3 px-6">Nome</th>
+                                        <th scope="col" class="py-3 px-6 no-print">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-funcionarios"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Cadastro de Transportadoras -->
+                     <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                        <div class="no-print">
+                            <h2 class="text-2xl font-bold mb-6 text-white border-b border-gray-700 pb-2">Cadastro de Transportadoras</h2>
+                            <form id="form-transportadora">
+                                <div class="mb-4">
+                                    <label for="nome-transportadora" class="block mb-2 text-sm font-medium text-gray-300">Nome da Transportadora</label>
+                                    <input type="text" id="nome-transportadora" placeholder="Ex: Carga Rápida" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
+                                </div>
+                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">Salvar Transportadora</button>
+                            </form>
+                        </div>
+                         <div class="mt-6 table-container">
+                            <h2 class="text-2xl font-bold mb-4 text-white">Transportadoras Cadastradas</h2>
+                            <table class="w-full text-sm text-left text-gray-300">
+                                <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
+                                    <tr>
+                                        <th scope="col" class="py-3 px-6">Nome</th>
+                                        <th scope="col" class="py-3 px-6 no-print">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-transportadoras"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seção de Dashboards -->
+            <div id="content-dashboards" class="hidden">
+                <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 no-print">
+                    <h2 class="text-2xl font-bold mb-4 text-white">Filtros</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                             <label for="filtro-funcionario" class="block mb-2 text-sm font-medium text-gray-300">Funcionário</label>
+                             <select id="filtro-funcionario" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="geral">Geral</option>
+                             </select>
+                        </div>
+                        <div>
+                             <label for="filtro-atividade-hist" class="block mb-2 text-sm font-medium text-gray-300">Atividade</label>
+                             <select id="filtro-atividade-hist" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="geral">Geral</option>
+                             </select>
+                        </div>
+                        <div>
+                            <label for="filtro-data-inicio" class="block mb-2 text-sm font-medium text-gray-300">Data Início</label>
+                            <input type="date" id="filtro-data-inicio" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                             <label for="filtro-data-fim" class="block mb-2 text-sm font-medium text-gray-300">Data Fim</label>
+                             <input type="date" id="filtro-data-fim" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                        <h2 id="titulo-desempenho" class="text-xl font-bold mb-4 text-white">Desempenho Geral (% Meta Atingida)</h2>
+                        <canvas id="desempenho-funcionarios-chart"></canvas>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                        <div class="no-print">
+                            <h2 class="text-xl font-bold mb-4 text-white">Produção Diária x Meta</h2>
+                            <input type="date" id="filtro-data-diaria" class="w-full md:w-1/2 bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 mb-4 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <canvas id="total-atividade-meta-chart"></canvas>
+                    </div>
+                    <div class="lg:col-span-2 bg-gray-800 p-6 rounded-lg shadow-lg">
+                        <h2 class="text-xl font-bold mb-4 text-white">Histórico de Produção (Quantidade)</h2>
+                        <canvas id="historico-producao-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+
     </div>
 
-    <!-- Firebase SDKs -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        // Importações do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
-        // --- INÍCIO DA CONFIGURAÇÃO DO FIREBASE ---
+        // Configuração do Firebase
         const firebaseConfig = {
-            apiKey: "AIzaSyCbLj765BU-TaE0GSsC3CCsCt4Wrgf0nyU",
-            authDomain: "painel-interativo-a72ab.firebaseapp.com",
-            projectId: "painel-interativo-a72ab",
-            storageBucket: "painel-interativo-a72ab.appspot.com",
-            messagingSenderId: "934583256105",
-            appId: "1:934583256105:web:034fb795d11a5c116ac838",
-            measurementId: "G-4T3FTKT0K3"
+          apiKey: "AIzaSyB2GpqGN6nadQ0Xee3qR5uyeUwMqenteo8",
+          authDomain: "controle-produtividade-exp.firebaseapp.com",
+          projectId: "controle-produtividade-exp",
+          storageBucket: "controle-produtividade-exp.firebasestorage.app",
+          messagingSenderId: "887465393911",
+          appId: "1:887465393911:web:eea4d17d445363c7161df2",
+          measurementId: "G-JRP1YYN42J"
+        };
+
+        // Inicialização do Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+
+        // Elementos da UI
+        const tabs = {
+            lancamentos: document.getElementById('tab-lancamentos'),
+            cadastros: document.getElementById('tab-cadastros'),
+            dashboards: document.getElementById('tab-dashboards'),
+        };
+        const contents = {
+            lancamentos: document.getElementById('content-lancamentos'),
+            cadastros: document.getElementById('content-cadastros'),
+            dashboards: document.getElementById('content-dashboards'),
         };
         
-        let app, auth, db;
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-        } catch (error) {
-            console.error("Erro na configuração do Firebase:", error);
-            alert("Erro fatal na configuração do Firebase. A aplicação não pode continuar.");
-            document.getElementById('loadingOverlay').style.display = 'none';
-        }
-        // --- FIM DA CONFIGURAÇÃO DO FIREBASE ---
+        // Formulários e Tabelas
+        const formAtividade = document.getElementById('form-atividade'), nomeAtividadeInput = document.getElementById('nome-atividade'), metaAtividadeInput = document.getElementById('meta-atividade'), tabelaAtividades = document.getElementById('tabela-atividades');
+        const formFuncionario = document.getElementById('form-funcionario'), nomeFuncionarioInput = document.getElementById('nome-funcionario'), tabelaFuncionarios = document.getElementById('tabela-funcionarios');
+        const formTransportadora = document.getElementById('form-transportadora'), nomeTransportadoraInput = document.getElementById('nome-transportadora'), tabelaTransportadoras = document.getElementById('tabela-transportadoras');
+        const formLancamento = document.getElementById('form-lancamento');
+        const dataInput = document.getElementById('data'), horaInicialInput = document.getElementById('hora-inicial'), horaFinalInput = document.getElementById('hora-final');
+        const atividadeLancamentoSelect = document.getElementById('atividade-lancamento'), funcionarioLancamentoSelect = document.getElementById('funcionario-lancamento'), transportadoraLancamentoSelect = document.getElementById('transportadora-lancamento');
+        const quantidadeInput = document.getElementById('quantidade'), pausaInput = document.getElementById('pausa'), motivoPausaInput = document.getElementById('motivo-pausa');
+        const tabelaLancamentos = document.getElementById('tabela-lancamentos');
 
+        // Filtros Dashboard
+        const filtroFuncionario = document.getElementById('filtro-funcionario'), filtroAtividadeHist = document.getElementById('filtro-atividade-hist');
+        const filtroDataInicio = document.getElementById('filtro-data-inicio'), filtroDataFim = document.getElementById('filtro-data-fim');
+        const filtroDataDiaria = document.getElementById('filtro-data-diaria'), tituloDesempenho = document.getElementById('titulo-desempenho');
+        const btnImprimir = document.getElementById('btn-imprimir');
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // --- Seletores de Elementos ---
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            const dashboardContainer = document.getElementById('dashboardContainer');
-            const loginModal = document.getElementById('loginModal');
-            const loginModalContent = document.getElementById('loginModalContent');
-            const loginForm = document.getElementById('loginForm');
-            const loginError = document.getElementById('loginError');
-            const loginBtn = document.getElementById('loginBtn');
-            const logoutBtn = document.getElementById('logoutBtn');
-            const cancelLoginBtn = document.getElementById('cancelLoginBtn');
-            const appLoginModal = document.getElementById('appLoginModal');
-            const appLoginModalContent = document.getElementById('appLoginModalContent');
-            const appLoginForm = document.getElementById('appLoginForm');
-            const appLoginTitle = document.getElementById('appLoginTitle');
-            const appLoginError = document.getElementById('appLoginError');
-            const cancelAppLoginBtn = document.getElementById('cancelAppLoginBtn');
-            const appGrid = document.getElementById('appGrid');
-            const addAppBtn = document.getElementById('addAppBtn');
-            const emptyState = document.getElementById('emptyState');
-            const addModal = document.getElementById('addAppModal');
-            const modalTitle = document.getElementById('modalTitle');
-            const modalContent = document.getElementById('modalContent');
-            const cancelBtn = document.getElementById('cancelBtn');
-            const addAppForm = document.getElementById('addAppForm');
-            const appRequiresAuth = document.getElementById('appRequiresAuth');
-            const appCredentialsContainer = document.getElementById('appCredentialsContainer');
-            const addCredentialBtn = document.getElementById('addCredentialBtn');
-            const appViewer = document.getElementById('appViewer');
-            const appViewerTitle = document.getElementById('appViewerTitle');
-            const appFrame = document.getElementById('appFrame');
-            const backToDashboardBtn = document.getElementById('backToDashboardBtn');
-            const deleteConfirmModal = document.getElementById('deleteConfirmModal');
-            const deleteModalContent = document.getElementById('deleteModalContent');
-            const deleteModalText = document.getElementById('deleteModalText');
-            const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
-            const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        // Estado da Aplicação (cache local dos dados do Firestore)
+        let atividades = [], funcionarios = [], transportadoras = [], lancamentos = [];
+        let charts = {};
+        let dbInitialized = false;
 
-            // --- Estado da Aplicação ---
-            let apps = [];
-            let indexToDelete = null;
-            let editingAppIndex = null;
-            let appToOpenAfterLogin = null;
-            let isLoggedIn = false;
-            let userId = null; // Still useful for auth checks, just not for doc path
-            let unsubscribeFromFirestore = null;
-
-            // --- Funções de Dados (Firestore) ---
-            const saveAppsToFirestore = async () => {
-                if (!auth.currentUser) return; // Need to be authenticated to write
-                try {
-                    // CORRECTED: Use a fixed path for a shared dashboard
-                    const docRef = doc(db, "dashboards", "sharedPanel");
-                    await setDoc(docRef, { apps: apps });
-                } catch (error) {
-                    console.error("Erro ao salvar no Firestore: ", error);
-                    alert("Não foi possível salvar as alterações. Verifique sua conexão e as regras de segurança do Firestore.");
-                }
-            };
-
-            const setupFirestoreListener = () => {
-                // CORRECTED: Use a fixed path for a shared dashboard
-                const docRef = doc(db, "dashboards", "sharedPanel");
-                
-                if (unsubscribeFromFirestore) unsubscribeFromFirestore();
-                
-                unsubscribeFromFirestore = onSnapshot(docRef, (docSnap) => {
-                    if (docSnap.exists() && docSnap.data().apps) {
-                        apps = docSnap.data().apps;
-                    } else {
-                        // If the shared document doesn't exist, create it with default data
-                        apps = [
-                            { name: 'Módulo de Estoque', url: './mrp_estoque.html', description: 'Sistema de gerenciamento de estoque (MRP).', category: 'Trabalho', requiresAuth: true, credentials: [{user: 'wellinton', pass: '123'}, {user: 'admin', pass: 'admin'}] },
-                            { name: 'Figma', url: 'https://figma.com', description: 'Ferramenta de design colaborativo.', category: 'Design', requiresAuth: false, credentials: [] },
-                        ];
-                        saveAppsToFirestore(); // Save the initial data for everyone
-                    }
-                    renderApps();
-                    
-                    loadingOverlay.classList.add('opacity-0');
-                    setTimeout(() => {
-                        loadingOverlay.classList.add('hidden');
-                        dashboardContainer.classList.remove('invisible');
-                    }, 300);
-                }, (error) => {
-                    console.error("Erro ao ouvir dados do Firestore:", error);
-                    alert("Não foi possível carregar os dados. Verifique as regras de segurança do seu projeto Firebase. Para um painel compartilhado, as regras precisam permitir leitura/escrita para usuários autenticados.");
-                    loadingOverlay.style.display = 'none';
-                });
-            };
-
-            const renderApps = () => {
-                appGrid.innerHTML = ''; 
-                if (apps.length === 0) {
-                    emptyState.classList.remove('hidden');
-                    appGrid.className = '';
-                } else {
-                    emptyState.classList.add('hidden');
-                    appGrid.className = 'space-y-12';
-
-                    const appsByCategory = apps.reduce((acc, app) => {
-                        const category = app.category || 'Sem Categoria';
-                        if (!acc[category]) { acc[category] = []; }
-                        acc[category].push(app);
-                        return acc;
-                    }, {});
-
-                    const sortedCategories = Object.keys(appsByCategory).sort();
-
-                    sortedCategories.forEach(category => {
-                        const categorySection = document.createElement('section');
-                        const categoryTitle = document.createElement('h2');
-                        categoryTitle.className = 'text-2xl font-bold text-gray-800 mb-4 capitalize';
-                        categoryTitle.textContent = category;
-                        categorySection.appendChild(categoryTitle);
-
-                        const categoryGrid = document.createElement('div');
-                        categoryGrid.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6';
-
-                        appsByCategory[category].forEach((app) => {
-                            const index = apps.findIndex(originalApp => originalApp.name === app.name && originalApp.url === app.url && originalApp.category === app.category);
-                            if (index === -1) return; // Skip if not found in global array
-                            const firstLetter = app.name.charAt(0).toUpperCase();
-                            const card = document.createElement('div');
-                            card.className = "app-card bg-white rounded-xl shadow-sm overflow-hidden flex flex-col group relative";
-                            card.innerHTML = `
-                                <a href="${app.url}" data-index="${index}" data-name="${app.name}" class="app-link flex-grow p-4 flex flex-col items-center justify-center text-center cursor-pointer min-h-32">
-                                    <div class="flex-shrink-0 h-12 w-12 flex items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 font-bold text-xl mb-3">${firstLetter}</div>
-                                    <p class="text-base font-semibold text-gray-800 w-full px-2">${app.name}</p>
-                                </a>
-                                <button data-index="${index}" class="edit-btn absolute top-2 right-10 h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-gray-500 opacity-0 group-hover:opacity-100 hover:bg-blue-500 hover:text-white transition-all scale-75 group-hover:scale-100" title="Editar App">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
-                                </button>
-                                <button data-index="${index}" class="delete-btn absolute top-2 right-2 h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-gray-500 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all scale-75 group-hover:scale-100" title="Remover App">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            `;
-                            categoryGrid.appendChild(card);
-                        });
-                        categorySection.appendChild(categoryGrid);
-                        appGrid.appendChild(categorySection);
-                    });
-                }
-            };
-            
-            // --- Funções de Modal ---
-            const openAddModal = () => {
-                editingAppIndex = null;
-                modalTitle.textContent = "Adicionar Aplicativo";
-                addAppForm.reset();
-                appCredentialsContainer.innerHTML = '';
-                appCredentialsContainer.appendChild(addCredentialBtn);
-                appCredentialsContainer.classList.add('hidden');
-                addModal.classList.remove('invisible', 'opacity-0');
-                modalContent.classList.remove('scale-95', 'opacity-0');
-            };
-
-            const openAddModalForEdit = (index) => {
-                editingAppIndex = index;
-                const app = apps[index];
-                modalTitle.textContent = "Editar Aplicativo";
-                addAppForm.appName.value = app.name;
-                addAppForm.appUrl.value = app.url;
-                addAppForm.appCategory.value = app.category;
-                addAppForm.appDesc.value = app.description || '';
-                appRequiresAuth.checked = app.requiresAuth;
-                appCredentialsContainer.innerHTML = '';
-                if (app.requiresAuth) {
-                    appCredentialsContainer.classList.remove('hidden');
-                    if(app.credentials && app.credentials.length > 0) {
-                        app.credentials.forEach(cred => addCredentialRow(cred.user, cred.pass));
-                    }
-                } else {
-                    appCredentialsContainer.classList.add('hidden');
-                }
-                appCredentialsContainer.appendChild(addCredentialBtn);
-                addModal.classList.remove('invisible', 'opacity-0');
-                modalContent.classList.remove('scale-95', 'opacity-0');
-            };
-
-            const closeAddModal = () => {
-                modalContent.classList.add('scale-95', 'opacity-0');
-                addModal.classList.add('opacity-0');
-                setTimeout(() => {
-                    addModal.classList.add('invisible');
-                    addAppForm.reset();
-                    editingAppIndex = null;
-                }, 300);
-            };
-
-            const openAppLoginModal = (index) => {
-                appToOpenAfterLogin = index;
-                appLoginTitle.textContent = `Acesso para "${apps[index].name}"`;
-                appLoginModal.classList.remove('invisible', 'opacity-0');
-                appLoginModalContent.classList.remove('scale-95', 'opacity-0');
-            };
-
-            const closeAppLoginModal = () => {
-                appLoginModalContent.classList.add('scale-95', 'opacity-0');
-                appLoginModal.classList.add('opacity-0');
-                setTimeout(() => {
-                    appLoginModal.classList.add('invisible');
-                    appLoginForm.reset();
-                    appLoginError.textContent = '';
-                    appToOpenAfterLogin = null;
-                }, 300);
-            };
-            
-            const openDeleteModal = (index) => {
-                indexToDelete = index;
-                deleteModalText.textContent = `Você tem certeza que deseja remover o aplicativo "${apps[index].name}"?`;
-                deleteConfirmModal.classList.remove('invisible', 'opacity-0');
-                deleteModalContent.classList.remove('scale-95', 'opacity-0');
-            };
-
-            const closeDeleteModal = () => {
-                deleteModalContent.classList.add('scale-95', 'opacity-0');
-                deleteConfirmModal.classList.add('opacity-0');
-                setTimeout(() => {
-                    deleteConfirmModal.classList.add('invisible');
-                    indexToDelete = null;
-                }, 300);
-            };
-
-            const openLoginModal = () => {
-                loginModal.classList.remove('invisible', 'opacity-0');
-                loginModalContent.classList.remove('scale-95', 'opacity-0');
-            };
-
-            const closeLoginModal = () => {
-                loginModalContent.classList.add('scale-95', 'opacity-0');
-                loginModal.classList.add('opacity-0');
-                setTimeout(() => {
-                    loginModal.classList.add('invisible');
-                    loginError.textContent = '';
-                    loginForm.reset();
-                }, 300);
-            };
-            
-            const addCredentialRow = (user = '', pass = '') => {
-                const row = document.createElement('div');
-                row.className = 'flex items-center space-x-2 credential-row';
-                row.innerHTML = `
-                    <input type="text" value="${user}" class="w-full px-2 py-1 border border-gray-300 rounded-md text-sm app-cred-user" placeholder="Usuário" required>
-                    <input type="text" value="${pass}" class="w-full px-2 py-1 border border-gray-300 rounded-md text-sm app-cred-pass" placeholder="Senha" required>
-                    <button type="button" class="remove-cred-btn flex-shrink-0 h-7 w-7 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-red-500 hover:text-white transition-colors">
-                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                `;
-                addCredentialBtn.before(row);
-                row.querySelector('.remove-cred-btn').addEventListener('click', () => row.remove());
-            };
-            
-            // --- Funções de Manipulação de Eventos ---
-            const handleFormSubmit = (e) => {
-                e.preventDefault();
-                const newApp = {
-                    name: e.target.appName.value.trim(),
-                    url: e.target.appUrl.value.trim(),
-                    category: e.target.appCategory.value.trim(),
-                    description: e.target.appDesc.value.trim(),
-                    requiresAuth: e.target.appRequiresAuth.checked,
-                    credentials: []
-                };
-
-                if (newApp.requiresAuth) {
-                    document.querySelectorAll('.credential-row').forEach(row => {
-                        const user = row.querySelector('.app-cred-user').value.trim();
-                        const pass = row.querySelector('.app-cred-pass').value.trim();
-                        if (user && pass) {
-                            newApp.credentials.push({ user, pass });
-                        }
-                    });
-                }
-                
-                if (editingAppIndex !== null) {
-                    apps[editingAppIndex] = newApp;
-                } else {
-                    apps.push(newApp);
-                }
-                
-                saveAppsToFirestore();
-                closeAddModal();
-            };
-            
-            const launchApp = (index) => {
-                const app = apps[index];
-                appViewerTitle.textContent = app.name;
-                appFrame.src = app.url;
-                dashboardContainer.classList.add('hidden');
-                appViewer.classList.remove('invisible', 'opacity-0');
-            };
-
-            const handleGridClick = (e) => {
-                const deleteButton = e.target.closest('.delete-btn');
-                const editButton = e.target.closest('.edit-btn');
-                const appLink = e.target.closest('.app-link');
-
-                if (deleteButton) {
-                    e.preventDefault();
-                    if (isLoggedIn) openDeleteModal(parseInt(deleteButton.dataset.index, 10));
-                    return;
-                }
-                if (editButton) {
-                    e.preventDefault();
-                    if (isLoggedIn) openAddModalForEdit(parseInt(editButton.dataset.index, 10));
-                    return;
-                }
-                if (appLink) {
-                    e.preventDefault();
-                    const index = parseInt(appLink.dataset.index, 10);
-                    const app = apps[index];
-                    if (app.requiresAuth) {
-                        openAppLoginModal(index);
-                    } else {
-                        launchApp(index);
-                    }
-                }
-            };
-
-            const handleBackToDashboard = () => {
-                appViewer.classList.add('invisible', 'opacity-0');
-                dashboardContainer.classList.remove('hidden');
-                appFrame.src = 'about:blank';
-                appViewerTitle.textContent = '';
-            };
-            
-            const handleDeleteConfirm = () => {
-                if (indexToDelete !== null) {
-                    apps.splice(indexToDelete, 1);
-                    saveAppsToFirestore();
-                    closeDeleteModal();
-                }
-            };
-            
-            const handleAppLoginSubmit = (e) => {
-                e.preventDefault();
-                const app = apps[appToOpenAfterLogin];
-                const username = e.target.appUsername.value;
-                const password = e.target.appPassword.value;
-                const isValid = app.credentials.some(cred => cred.user === username && cred.pass === password);
-
-                if (isValid) {
-                    closeAppLoginModal();
-                    launchApp(appToOpenAfterLogin);
-                } else {
-                    appLoginError.textContent = "Usuário ou senha inválidos para este app.";
-                }
-            };
-
-
-            // --- Lógica de Login/Logout ---
-            const updateLoginStateUI = () => { document.body.classList.toggle('logged-in', isLoggedIn); };
-
-            const handleLogin = (e) => {
-                e.preventDefault();
-                if (loginForm.username.value === 'Wellinton' && loginForm.password.value === 'Wellinton7842') {
-                    isLoggedIn = true;
-                    sessionStorage.setItem('isUserLoggedIn', 'true');
-                    updateLoginStateUI();
-                    closeLoginModal();
-                } else {
-                    loginError.textContent = 'Usuário ou senha inválidos.';
-                }
-            };
-
-            const handleLogout = () => {
-                isLoggedIn = false;
-                sessionStorage.removeItem('isUserLoggedIn');
-                updateLoginStateUI();
-            };
-
-            // --- Event Listeners ---
-            loginBtn.addEventListener('click', openLoginModal);
-            logoutBtn.addEventListener('click', handleLogout);
-            loginForm.addEventListener('submit', handleLogin);
-            cancelLoginBtn.addEventListener('click', closeLoginModal);
-            loginModal.addEventListener('click', (e) => { if (e.target === loginModal) closeLoginModal(); });
-
-            appLoginForm.addEventListener('submit', handleAppLoginSubmit);
-            cancelAppLoginBtn.addEventListener('click', closeAppLoginModal);
-            appLoginModal.addEventListener('click', (e) => { if (e.target === appLoginModal) closeAppLoginModal(); });
-            
-            addAppBtn.addEventListener('click', openAddModal);
-            cancelBtn.addEventListener('click', closeAddModal);
-            addModal.addEventListener('click', (e) => { if (e.target === addModal) closeAddModal(); });
-            addAppForm.addEventListener('submit', handleFormSubmit);
-            
-            appRequiresAuth.addEventListener('change', () => appCredentialsContainer.classList.toggle('hidden', !appRequiresAuth.checked));
-            addCredentialBtn.addEventListener('click', () => addCredentialRow());
-            
-            appGrid.addEventListener('click', handleGridClick);
-            backToDashboardBtn.addEventListener('click', handleBackToDashboard);
-
-            cancelDeleteBtn.addEventListener('click', closeDeleteModal);
-            confirmDeleteBtn.addEventListener('click', handleDeleteConfirm);
-            deleteConfirmModal.addEventListener('click', (e) => { if (e.target === deleteConfirmModal) closeDeleteModal(); });
-
-            // --- Inicialização com Firebase ---
-            const initializeApp = async () => {
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid; // Save the user's ID
-                        setupFirestoreListener(); // Setup listener for the shared document
-                        isLoggedIn = sessionStorage.getItem('isUserLoggedIn') === 'true';
-                        updateLoginStateUI();
-                    }
-                });
-                
-                if (!auth.currentUser) {
-                    try {
-                        await signInAnonymously(auth);
-                    } catch (error) {
-                        console.error("Erro no login anônimo:", error);
-                        alert("Não foi possível conectar ao serviço. Tente recarregar a página.");
-                    }
-                }
-            };
-            
-            if (db) {
-                initializeApp();
+        // Referências das Coleções do Firestore
+        const basePath = `artifacts/${appId}/public/data`;
+        const atividadesCol = collection(db, `${basePath}/atividades`);
+        const funcionariosCol = collection(db, `${basePath}/funcionarios`);
+        const transportadorasCol = collection(db, `${basePath}/transportadoras`);
+        const lancamentosCol = collection(db, `${basePath}/lancamentos`);
+        
+        // Autenticação e Inicialização
+        onAuthStateChanged(auth, (user) => {
+            if (user && !dbInitialized) {
+                console.log("Usuário autenticado anonimamente:", user.uid);
+                dbInitialized = true;
+                setupRealtimeListeners();
+                initUI();
+            } else if (!user) {
+                signInAnonymously(auth).catch((error) => console.error("Erro na autenticação anônima:", error));
             }
         });
+
+        // Configura os listeners para atualizações em tempo real
+        function setupRealtimeListeners() {
+            onSnapshot(query(atividadesCol, orderBy("nome")), (snapshot) => {
+                atividades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderizarAtividades();
+                renderizarLancamentos();
+                if (!contents.dashboards.classList.contains('hidden')) renderizarDashboards();
+            }, (error) => console.error("Erro no listener de atividades:", error));
+
+            onSnapshot(query(funcionariosCol, orderBy("nome")), (snapshot) => {
+                funcionarios = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderizarFuncionarios();
+                renderizarLancamentos();
+                if (!contents.dashboards.classList.contains('hidden')) renderizarDashboards();
+            }, (error) => console.error("Erro no listener de funcionários:", error));
+
+            onSnapshot(query(transportadorasCol, orderBy("nome")), (snapshot) => {
+                transportadoras = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderizarTransportadoras();
+            }, (error) => console.error("Erro no listener de transportadoras:", error));
+
+            onSnapshot(query(lancamentosCol), (snapshot) => {
+                lancamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Ordena os lançamentos no lado do cliente para evitar a necessidade de um índice composto no Firestore
+                lancamentos.sort((a, b) => {
+                    const dateComparison = b.data.localeCompare(a.data);
+                    if (dateComparison !== 0) {
+                        return dateComparison;
+                    }
+                    return b.horaInicial.localeCompare(a.horaInicial);
+                });
+
+                renderizarLancamentos();
+                if (!contents.dashboards.classList.contains('hidden')) renderizarDashboards();
+            }, (error) => console.error("Erro no listener de lançamentos:", error));
+        }
+        
+        // Funções de Renderização (mantidas como antes, mas agora usam dados do Firestore)
+        const renderGenericList = (tbody, items, emptyMessage, renderFn) => {
+            tbody.innerHTML = '';
+            if (items.length === 0) {
+                const colSpan = tbody.previousElementSibling.firstElementChild.children.length;
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center py-4 text-gray-500">${emptyMessage}</td></tr>`;
+            } else {
+                items.forEach(item => tbody.appendChild(renderFn(item)));
+            }
+        };
+        
+        const renderizarAtividades = () => {
+            renderGenericList(tabelaAtividades, atividades, 'Nenhuma atividade cadastrada.', atividade => {
+                const tr = document.createElement('tr'); tr.className = 'bg-gray-800 border-b border-gray-700';
+                tr.innerHTML = `<td class="py-4 px-6 font-medium text-white">${atividade.nome}</td><td class="py-4 px-6">${atividade.meta}</td><td class="py-4 px-6 no-print"><button data-id="${atividade.id}" data-type="atividade" class="btn-excluir text-red-500 hover:text-red-700 font-semibold">Excluir</button></td>`; return tr;
+            });
+            atualizarDropdown(atividadeLancamentoSelect, atividades, 'atividade', false);
+            atualizarDropdown(filtroAtividadeHist, atividades, 'atividade', true);
+        };
+
+        const renderizarFuncionarios = () => {
+            renderGenericList(tabelaFuncionarios, funcionarios, 'Nenhum funcionário cadastrado.', f => {
+                const tr = document.createElement('tr'); tr.className = 'bg-gray-800 border-b border-gray-700';
+                tr.innerHTML = `<td class="py-4 px-6 font-medium text-white">${f.nome}</td><td class="py-4 px-6 no-print"><button data-id="${f.id}" data-type="funcionario" class="btn-excluir text-red-500 hover:text-red-700 font-semibold">Excluir</button></td>`; return tr;
+            });
+             atualizarDropdown(funcionarioLancamentoSelect, funcionarios, 'funcionário', false);
+             atualizarDropdown(filtroFuncionario, funcionarios, 'funcionário', true);
+        };
+
+        const renderizarTransportadoras = () => {
+            renderGenericList(tabelaTransportadoras, transportadoras, 'Nenhuma transportadora cadastrada.', t => {
+                const tr = document.createElement('tr'); tr.className = 'bg-gray-800 border-b border-gray-700';
+                tr.innerHTML = `<td class="py-4 px-6 font-medium text-white">${t.nome}</td><td class="py-4 px-6 no-print"><button data-id="${t.id}" data-type="transportadora" class="btn-excluir text-red-500 hover:text-red-700 font-semibold">Excluir</button></td>`; return tr;
+            });
+            atualizarDropdown(transportadoraLancamentoSelect, transportadoras, 'transportadora', false);
+        };
+
+        const renderizarLancamentos = () => {
+             renderGenericList(tabelaLancamentos, lancamentos, 'Nenhum lançamento registrado.', l => {
+                const atividade = atividades.find(a => a.id == l.atividadeId), funcionario = funcionarios.find(f => f.id == l.funcionarioId);
+                const metaAtividade = atividade ? atividade.meta : 0, percentual = metaAtividade > 0 ? (l.producaoHora / metaAtividade) * 100 : 0;
+                let corPercentual = 'text-yellow-400';
+                if (percentual >= 100) corPercentual = 'text-green-400'; else if (percentual < 80) corPercentual = 'text-red-400';
+                const tr = document.createElement('tr'); tr.className = 'bg-gray-800 border-b border-gray-700';
+                tr.innerHTML = `
+                    <td class="py-4 px-6">${new Date(l.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
+                    <td class="py-4 px-6">${funcionario ? funcionario.nome : 'Excluído(a)'}</td>
+                    <td class="py-4 px-6 font-medium text-white">${atividade ? atividade.nome : 'Excluída'}</td>
+                    <td class="py-4 px-6">${l.quantidade}</td>
+                    <td class="py-4 px-6" title="${l.motivoPausa || ''}">${l.pausaMinutos}</td>
+                    <td class="py-4 px-6">${formatarTempo(l.tempoLiquido)}</td>
+                    <td class="py-4 px-6">${l.producaoHora.toFixed(2)}</td>
+                    <td class="py-4 px-6">${metaAtividade}</td>
+                    <td class="py-4 px-6 font-bold ${corPercentual}">${percentual.toFixed(2)}%</td>
+                    <td class="py-4 px-6 no-print"><button data-id="${l.id}" data-type="lancamento" class="btn-excluir text-red-500 hover:text-red-700 font-semibold">Excluir</button></td>`;
+                return tr;
+            });
+        };
+        
+        const atualizarDropdown = (select, items, placeholder, comGeral) => {
+            const valorAtual = select.value;
+            select.innerHTML = comGeral ? `<option value="geral">Geral</option>` : `<option value="">Selecione um(a) ${placeholder}</option>`;
+            items.forEach(item => select.innerHTML += `<option value="${item.id}">${item.nome}</option>`);
+            select.value = valorAtual;
+        };
+
+        const formatarTempo = (ms) => {
+            if (ms < 0) ms = 0;
+            const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), s = Math.floor(((ms % 3600000) % 60000) / 1000);
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        };
+        
+        // Lógica de Dashboards
+        const updateChart = (chartId, newConfig) => {
+            if(charts[chartId]) charts[chartId].destroy();
+            const ctx = document.getElementById(chartId).getContext('2d');
+            charts[chartId] = new Chart(ctx, newConfig);
+        };
+
+        const renderizarDashboards = () => {
+            const funcId = filtroFuncionario.value, ativId = filtroAtividadeHist.value;
+            const dataInicio = filtroDataInicio.value ? new Date(filtroDataInicio.value + 'T00:00:00') : null;
+            const dataFim = filtroDataFim.value ? new Date(filtroDataFim.value + 'T23:59:59') : null;
+            const lancamentosFiltrados = lancamentos.filter(l => {
+                const dataLancamento = new Date(l.data + 'T00:00:00');
+                const filtroFuncOk = funcId === 'geral' || l.funcionarioId == funcId;
+                const filtroAtivOk = ativId === 'geral' || l.atividadeId == ativId;
+                const filtroDataInicioOk = !dataInicio || dataLancamento >= dataInicio;
+                const filtroDataFimOk = !dataFim || dataLancamento <= dataFim;
+                return filtroFuncOk && filtroAtivOk && filtroDataInicioOk && filtroDataFimOk;
+            });
+            renderDesempenhoChart(lancamentosFiltrados, funcId);
+            renderProducaoDiariaChart();
+            renderHistoricoProducaoChart(lancamentosFiltrados);
+        };
+
+        const renderDesempenhoChart = (dados, funcId) => {
+            let chartData, title;
+            const chartOptions = { scales: { y: { beginAtZero: true, ticks: { color: '#d1d5db' } }, x: { ticks: { color: '#d1d5db' } } }, plugins: { legend: { labels: { color: '#d1d5db' } } } };
+            if (funcId === 'geral') {
+                title = "Desempenho Geral (% Meta Atingida)";
+                const desempenho = {};
+                dados.forEach(l => {
+                    const func = funcionarios.find(f => f.id == l.funcionarioId); if(!func) return;
+                    if(!desempenho[func.nome]) desempenho[func.nome] = { total: 0, count: 0 };
+                    const ativ = atividades.find(a => a.id == l.atividadeId), meta = ativ ? ativ.meta : 0;
+                    const perc = meta > 0 ? (l.producaoHora / meta) * 100 : 0;
+                    desempenho[func.nome].total += perc; desempenho[func.nome].count++;
+                });
+                const labels = Object.keys(desempenho); const data = labels.map(nome => (desempenho[nome].total / desempenho[nome].count));
+                chartData = { labels, datasets: [{ label: 'Média de % da Meta', data, backgroundColor: 'rgba(79, 70, 229, 0.8)' }] };
+            } else {
+                const funcNome = funcionarios.find(f => f.id == funcId)?.nome || 'Funcionário';
+                title = `Desempenho por Atividade - ${funcNome} (% Meta)`;
+                const desempenho = {};
+                dados.forEach(l => {
+                    const ativ = atividades.find(a => a.id == l.atividadeId); if(!ativ) return;
+                    if(!desempenho[ativ.nome]) desempenho[ativ.nome] = { total: 0, count: 0 };
+                    const meta = ativ.meta, perc = meta > 0 ? (l.producaoHora / meta) * 100 : 0;
+                    desempenho[ativ.nome].total += perc; desempenho[ativ.nome].count++;
+                });
+                const labels = Object.keys(desempenho); const data = labels.map(nome => (desempenho[nome].total / desempenho[nome].count));
+                chartData = { labels, datasets: [{ label: 'Média de % da Meta', data, backgroundColor: 'rgba(52, 211, 153, 0.8)' }] };
+            }
+            tituloDesempenho.textContent = title;
+            updateChart('desempenho-funcionarios-chart', { type: 'bar', data: chartData, options: chartOptions });
+        };
+
+        const renderProducaoDiariaChart = () => {
+            const dataSelecionada = filtroDataDiaria.value;
+            if (!dataSelecionada) { updateChart('total-atividade-meta-chart', {type: 'bar', data: {labels: [], datasets:[]}}); return; }
+            const lancamentosDoDia = lancamentos.filter(l => l.data === dataSelecionada), dados = {};
+            lancamentosDoDia.forEach(l => {
+                const ativ = atividades.find(a => a.id == l.atividadeId); if(!ativ) return;
+                if(!dados[ativ.nome]) dados[ativ.nome] = { produzido: 0, tempoHoras: 0, metaHora: ativ.meta };
+                dados[ativ.nome].produzido += l.quantidade; dados[ativ.nome].tempoHoras += l.tempoLiquido / 3600000;
+            });
+            const labels = Object.keys(dados), dataProduzido = labels.map(nome => dados[nome].produzido), dataMeta = labels.map(nome => dados[nome].metaHora * dados[nome].tempoHoras);
+            updateChart('total-atividade-meta-chart', { type: 'bar', data: { labels, datasets: [{ label: 'Total Produzido', data: dataProduzido, backgroundColor: 'rgba(79, 70, 229, 0.8)' }, { label: 'Meta Esperada', data: dataMeta, backgroundColor: 'rgba(239, 68, 68, 0.8)' }] }, options: { scales: { y: { beginAtZero: true, ticks: { color: '#d1d5db' } }, x: { ticks: { color: '#d1d5db' } } }, plugins: { legend: { labels: { color: '#d1d5db' } } } } });
+        };
+
+        const renderHistoricoProducaoChart = (dados) => {
+            const producaoPorDia = {};
+            dados.forEach(l => { if(!producaoPorDia[l.data]) producaoPorDia[l.data] = 0; producaoPorDia[l.data] += l.quantidade; });
+            const labels = Object.keys(producaoPorDia).sort((a,b) => new Date(a) - new Date(b)), data = labels.map(label => producaoPorDia[label]);
+            updateChart('historico-producao-chart', { type: 'line', data: { labels, datasets: [{ label: 'Quantidade Produzida', data, borderColor: 'rgba(52, 211, 153, 1)', backgroundColor: 'rgba(52, 211, 153, 0.2)', fill: true, tension: 0.1 }] }, options: { scales: { y: { beginAtZero: true, ticks: { color: '#d1d5db' } },  x: { type: 'time', time: { unit: 'day' }, ticks: { color: '#d1d5db' } } }, plugins: { legend: { labels: { color: '#d1d5db' } } } } });
+        };
+
+        // Event Handlers
+        Object.keys(tabs).forEach(key => tabs[key].addEventListener('click', () => {
+            Object.keys(tabs).forEach(k => {
+                const isSelected = k === key;
+                tabs[k].classList.toggle('tab-active', isSelected); tabs[k].classList.toggle('tab-inactive', !isSelected);
+                contents[k].classList.toggle('hidden', !isSelected);
+            });
+            if(key === 'dashboards') renderizarDashboards();
+        }));
+        
+        [filtroFuncionario, filtroAtividadeHist, filtroDataInicio, filtroDataFim].forEach(el => el.addEventListener('change', renderizarDashboards));
+        filtroDataDiaria.addEventListener('change', renderProducaoDiariaChart);
+        btnImprimir.addEventListener('click', () => window.print());
+
+        // Handlers de Submissão de Formulários (agora com Firestore)
+        formAtividade.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const nome = nomeAtividadeInput.value.trim(); const meta = parseFloat(metaAtividadeInput.value);
+            if (nome && !isNaN(meta)) {
+                try { await addDoc(atividadesCol, { nome, meta }); formAtividade.reset(); } 
+                catch (err) { console.error(err); alert("Erro ao salvar atividade."); }
+            }
+        });
+        formFuncionario.addEventListener('submit', async (e) => {
+            e.preventDefault(); const nome = nomeFuncionarioInput.value.trim();
+            if (nome) {
+                try { await addDoc(funcionariosCol, { nome }); formFuncionario.reset(); }
+                catch (err) { console.error(err); alert("Erro ao salvar funcionário."); }
+            }
+        });
+        formTransportadora.addEventListener('submit', async (e) => {
+            e.preventDefault(); const nome = nomeTransportadoraInput.value.trim();
+            if (nome) {
+                try { await addDoc(transportadorasCol, { nome }); formTransportadora.reset(); }
+                catch (err) { console.error(err); alert("Erro ao salvar transportadora."); }
+            }
+        });
+        formLancamento.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = dataInput.value, horaInicial = horaInicialInput.value, horaFinal = horaFinalInput.value;
+            const atividadeId = atividadeLancamentoSelect.value, funcionarioId = funcionarioLancamentoSelect.value, transportadoraId = transportadoraLancamentoSelect.value;
+            const quantidade = parseInt(quantidadeInput.value), pausaMinutos = parseInt(pausaInput.value) || 0, motivoPausa = motivoPausaInput.value.trim();
+            if (!data || !horaInicial || !horaFinal || !atividadeId || !funcionarioId || !transportadoraId || isNaN(quantidade)) { alert("Por favor, preencha todos os campos obrigatórios."); return; }
+            const inicio = new Date(`${data}T${horaInicial}`), fim = new Date(`${data}T${horaFinal}`);
+            if (fim <= inicio) { alert("A hora final deve ser maior que a hora inicial."); return; }
+            const tempoTotalMs = fim - inicio, tempoPausaMs = pausaMinutos * 60 * 1000;
+            if (tempoPausaMs >= tempoTotalMs) { alert("O tempo de pausa não pode ser maior ou igual ao tempo total."); return; }
+            const tempoLiquidoMs = tempoTotalMs - tempoPausaMs, tempoLiquidoHoras = tempoLiquidoMs / 3600000;
+            const producaoHora = tempoLiquidoHoras > 0 ? quantidade / tempoLiquidoHoras : 0;
+            const novoLancamento = { data, horaInicial, horaFinal, atividadeId, funcionarioId, transportadoraId, quantidade, pausaMinutos, motivoPausa, tempoLiquido: tempoLiquidoMs, producaoHora };
+            try {
+                await addDoc(lancamentosCol, novoLancamento);
+                formLancamento.reset(); pausaInput.value = 0; dataInput.value = new Date().toISOString().split('T')[0];
+            } catch (err) { console.error(err); alert("Erro ao salvar lançamento."); }
+        });
+        
+        // Handler de Exclusão (agora com Firestore)
+        document.querySelector('main').addEventListener('click', async (e) => {
+            if (!e.target.classList.contains('btn-excluir')) return;
+            const id = e.target.dataset.id, type = e.target.dataset.type;
+            const colMap = { atividade: atividadesCol, funcionario: funcionariosCol, transportadora: transportadorasCol, lancamento: lancamentosCol };
+            if (confirm(`Tem certeza que deseja excluir este item?`)) {
+                try { await deleteDoc(doc(db, colMap[type].path, id)); } 
+                catch (err) { console.error(err); alert(`Erro ao excluir ${type}.`); }
+            }
+        });
+        
+        // Inicializa a UI com datas padrão
+        const initUI = () => {
+            const hoje = new Date(), trintaDiasAtras = new Date();
+            trintaDiasAtras.setDate(hoje.getDate() - 30);
+            const formatDate = (date) => date.toISOString().split('T')[0];
+            dataInput.value = formatDate(hoje);
+            filtroDataDiaria.value = formatDate(hoje);
+            filtroDataFim.value = formatDate(hoje);
+            filtroDataInicio.value = formatDate(trintaDiasAtras);
+        };
     </script>
 </body>
 </html>
