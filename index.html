@@ -386,12 +386,14 @@
             onSnapshot(query(atividadesCol, orderBy("nome")), (snapshot) => {
                 atividades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderizarAtividades();
+                renderizarLancamentos(); // Adicionado para garantir que a tabela e os cálculos sejam atualizados.
                 if (!contents.dashboards.classList.contains('hidden')) renderizarDashboards();
             }, (error) => console.error("Erro no listener de atividades:", error));
 
             onSnapshot(query(funcionariosCol, orderBy("nome")), (snapshot) => {
                 funcionarios = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderizarFuncionarios();
+                renderizarLancamentos(); // Adicionado para consistência se um funcionário for editado/excluído.
                 if (!contents.dashboards.classList.contains('hidden')) renderizarDashboards();
             }, (error) => console.error("Erro no listener de funcionários:", error));
 
@@ -773,4 +775,5 @@
     </script>
 </body>
 </html>
+
 
