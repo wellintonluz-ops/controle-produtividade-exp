@@ -179,7 +179,7 @@
                 <div class="mb-12">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div class="bg-gray-800 p-6 rounded-lg shadow-lg no-print">
-                            <h2 class="text-2xl font-bold mb-6 text-white border-b border-gray-700 pb-2">Nova Atividade</h2>
+                            <h2 id="form-atividade-titulo" class="text-2xl font-bold mb-6 text-white border-b border-gray-700 pb-2">Nova Atividade</h2>
                             <form id="form-atividade">
                                 <div class="mb-4">
                                     <label for="nome-atividade" class="block mb-2 text-sm font-medium text-gray-300">Nome da Atividade</label>
@@ -189,7 +189,8 @@
                                     <label for="meta-atividade" class="block mb-2 text-sm font-medium text-gray-300">Meta (peças/hora)</label>
                                     <input type="number" id="meta-atividade" placeholder="Ex: 100" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500" required>
                                 </div>
-                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">Salvar Atividade</button>
+                                <button type="submit" id="btn-salvar-atividade" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">Salvar Atividade</button>
+                                <button type="button" id="btn-cancelar-edicao" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 mt-2 hidden">Cancelar Edição</button>
                             </form>
                         </div>
                         <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
@@ -200,7 +201,7 @@
                                         <tr>
                                             <th scope="col" class="py-3 px-6">Nome</th>
                                             <th scope="col" class="py-3 px-6">Meta/Hr</th>
-                                            <th scope="col" class="py-3 px-6 no-print">Ação</th>
+                                            <th scope="col" class="py-3 px-6 no-print">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody id="tabela-atividades"></tbody>
@@ -307,7 +308,7 @@
         // Importações do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
         // Configuração do Firebase
         const firebaseConfig = {
@@ -340,7 +341,7 @@
         };
         
         // Formulários e Tabelas
-        const formAtividade = document.getElementById('form-atividade'), nomeAtividadeInput = document.getElementById('nome-atividade'), metaAtividadeInput = document.getElementById('meta-atividade'), tabelaAtividades = document.getElementById('tabela-atividades');
+        const formAtividade = document.getElementById('form-atividade'), nomeAtividadeInput = document.getElementById('nome-atividade'), metaAtividadeInput = document.getElementById('meta-atividade'), tabelaAtividades = document.getElementById('tabela-atividades'), formAtividadeTitulo = document.getElementById('form-atividade-titulo'), btnSalvarAtividade = document.getElementById('btn-salvar-atividade'), btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
         const formFuncionario = document.getElementById('form-funcionario'), nomeFuncionarioInput = document.getElementById('nome-funcionario'), tabelaFuncionarios = document.getElementById('tabela-funcionarios');
         const formTransportadora = document.getElementById('form-transportadora'), nomeTransportadoraInput = document.getElementById('nome-transportadora'), tabelaTransportadoras = document.getElementById('tabela-transportadoras');
         const formLancamento = document.getElementById('form-lancamento');
@@ -355,10 +356,11 @@
         const dashboardChartsContainer = document.getElementById('dashboard-charts-container');
         const btnImprimir = document.getElementById('btn-imprimir');
 
-        // Estado da Aplicação (cache local dos dados do Firestore)
+        // Estado da Aplicação
         let atividades = [], funcionarios = [], transportadoras = [], lancamentos = [];
         let charts = {};
         let dbInitialized = false;
+        let editingAtividadeId = null;
 
         // Referências das Coleções do Firestore
         const basePath = `artifacts/${appId}/public/data`;
@@ -384,14 +386,12 @@
             onSnapshot(query(atividadesCol, orderBy("nome")), (snapshot) => {
                 atividades = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderizarAtividades();
-                renderizarLancamentos();
                 if (!contents.dashboards.classList.contains('hidden')) renderizarDashboards();
             }, (error) => console.error("Erro no listener de atividades:", error));
 
             onSnapshot(query(funcionariosCol, orderBy("nome")), (snapshot) => {
                 funcionarios = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderizarFuncionarios();
-                renderizarLancamentos();
                 if (!contents.dashboards.classList.contains('hidden')) renderizarDashboards();
             }, (error) => console.error("Erro no listener de funcionários:", error));
 
@@ -428,7 +428,11 @@
         const renderizarAtividades = () => {
             renderGenericList(tabelaAtividades, atividades, 'Nenhuma atividade cadastrada.', atividade => {
                 const tr = document.createElement('tr'); tr.className = 'bg-gray-800 border-b border-gray-700';
-                tr.innerHTML = `<td class="py-4 px-6 font-medium text-white">${atividade.nome}</td><td class="py-4 px-6">${atividade.meta}</td><td class="py-4 px-6 no-print"><button data-id="${atividade.id}" data-type="atividade" class="btn-excluir text-red-500 hover:text-red-700 font-semibold">Excluir</button></td>`; return tr;
+                tr.innerHTML = `<td class="py-4 px-6 font-medium text-white">${atividade.nome}</td><td class="py-4 px-6">${atividade.meta}</td>
+                <td class="py-4 px-6 no-print">
+                    <button data-id="${atividade.id}" data-type="atividade" class="btn-editar text-indigo-400 hover:text-indigo-600 font-semibold mr-4">Editar</button>
+                    <button data-id="${atividade.id}" data-type="atividade" class="btn-excluir text-red-500 hover:text-red-700 font-semibold">Excluir</button>
+                </td>`; return tr;
             });
             atualizarDropdown(atividadeLancamentoSelect, atividades, 'atividade', false);
             atualizarDropdown(filtroAtividadeHist, atividades, 'atividade', true);
@@ -454,7 +458,9 @@
         const renderizarLancamentos = () => {
              renderGenericList(tabelaLancamentos, lancamentos, 'Nenhum lançamento registrado.', l => {
                 const atividade = atividades.find(a => a.id == l.atividadeId), funcionario = funcionarios.find(f => f.id == l.funcionarioId);
-                const metaAtividade = atividade ? atividade.meta : 0, percentual = metaAtividade > 0 ? (l.producaoHora / metaAtividade) * 100 : 0;
+                // Usa a meta salva no lançamento; se não existir (dado antigo), busca a meta atual da atividade.
+                const metaDoLancamento = l.metaNoLancamento ?? (atividade?.meta || 0);
+                const percentual = metaDoLancamento > 0 ? (l.producaoHora / metaDoLancamento) * 100 : 0;
                 let corPercentual = 'text-yellow-400';
                 if (percentual >= 100) corPercentual = 'text-green-400'; else if (percentual < 80) corPercentual = 'text-red-400';
                 const tr = document.createElement('tr'); tr.className = 'bg-gray-800 border-b border-gray-700';
@@ -466,7 +472,7 @@
                     <td class="py-4 px-6" title="${l.motivoPausa || ''}">${l.pausaMinutos}</td>
                     <td class="py-4 px-6">${formatarTempo(l.tempoLiquido)}</td>
                     <td class="py-4 px-6">${l.producaoHora.toFixed(2)}</td>
-                    <td class="py-4 px-6">${metaAtividade}</td>
+                    <td class="py-4 px-6">${metaDoLancamento}</td>
                     <td class="py-4 px-6 font-bold ${corPercentual}">${percentual.toFixed(2)}%</td>
                     <td class="py-4 px-6 no-print"><button data-id="${l.id}" data-type="lancamento" class="btn-excluir text-red-500 hover:text-red-700 font-semibold">Excluir</button></td>`;
                 return tr;
@@ -556,21 +562,22 @@
                 const func = funcionarios.find(f => f.id == l.funcionarioId);
                 if (!func) return;
                 if (!dadosPorFuncionario[func.nome]) {
-                    dadosPorFuncionario[func.nome] = { produzido: 0, tempoHoras: 0 };
+                    dadosPorFuncionario[func.nome] = { produzido: 0, metaEsperada: 0 };
                 }
+                const metaDoLancamento = l.metaNoLancamento ?? (atividade?.meta || 0);
                 dadosPorFuncionario[func.nome].produzido += l.quantidade;
-                dadosPorFuncionario[func.nome].tempoHoras += l.tempoLiquido / 3600000;
+                dadosPorFuncionario[func.nome].metaEsperada += metaDoLancamento * (l.tempoLiquido / 3600000);
             });
 
             const labels = Object.keys(dadosPorFuncionario);
             const dataProduzido = labels.map(nome => dadosPorFuncionario[nome].produzido);
-            const dataMeta = labels.map(nome => atividade.meta * dadosPorFuncionario[nome].tempoHoras);
-            const dataPercentual = labels.map((nome, i) => dataMeta[i] > 0 ? (dataProduzido[i] / dataMeta[i]) * 100 : 0);
+            const dataMeta = labels.map(nome => dadosPorFuncionario[nome].metaEsperada);
+            const dataPercentual = labels.map(nome => dadosPorFuncionario[nome].metaEsperada > 0 ? (dadosPorFuncionario[nome].produzido / dadosPorFuncionario[nome].metaEsperada) * 100 : 0);
 
-            let titleText = `Produção x Meta por Funcionário | Meta: ${atividade.meta}/hr`;
-            if (funcId !== 'geral') {
+            let titleText = `Produção x Meta por Funcionário | Meta Atual: ${atividade.meta}/hr`;
+             if (funcId !== 'geral') {
                 const funcNome = funcionarios.find(f => f.id == funcId)?.nome || 'Funcionário';
-                titleText = `Desempenho ${funcNome} | Meta: ${atividade.meta}/hr`
+                titleText = `Desempenho ${funcNome} | Meta Atual: ${atividade.meta}/hr`
             }
 
             const chartData = {
@@ -590,20 +597,12 @@
                 scales: {
                     x: { ticks: { color: '#d1d5db' } },
                     y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        beginAtZero: true,
-                        ticks: { color: '#d1d5db' },
-                        title: { display: true, text: 'Quantidade', color: '#d1d5db'}
+                        type: 'linear', display: true, position: 'left', beginAtZero: true,
+                        ticks: { color: '#d1d5db' }, title: { display: true, text: 'Quantidade', color: '#d1d5db'}
                     },
                     y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        beginAtZero: true,
-                        ticks: { color: '#d1d5db', callback: value => value + '%' },
-                        grid: { drawOnChartArea: false },
+                        type: 'linear', display: true, position: 'right', beginAtZero: true,
+                        ticks: { color: '#d1d5db', callback: value => value + '%' }, grid: { drawOnChartArea: false },
                         title: { display: true, text: '% Atingido', color: '#d1d5db'}
                     }
                 }
@@ -614,15 +613,14 @@
 
         const renderProducaoGeralChart = (canvasId, dados, atividade) => {
             const totalProduzido = dados.reduce((acc, l) => acc + l.quantidade, 0);
-            const totalTempoHoras = dados.reduce((acc, l) => acc + l.tempoLiquido, 0) / 3600000;
-            const metaEsperada = atividade.meta * totalTempoHoras;
+            const metaEsperada = dados.reduce((acc, l) => {
+                const metaDoLancamento = l.metaNoLancamento ?? (atividade?.meta || 0);
+                return acc + (metaDoLancamento * (l.tempoLiquido / 3600000));
+            }, 0);
 
              const chartData = {
                 labels: ['Total Produzido', 'Meta Esperada'],
-                datasets: [{
-                    data: [totalProduzido, metaEsperada],
-                    backgroundColor: ['rgba(79, 70, 229, 0.8)', 'rgba(239, 68, 68, 0.8)']
-                }]
+                datasets: [{ data: [totalProduzido, metaEsperada], backgroundColor: ['rgba(79, 70, 229, 0.8)', 'rgba(239, 68, 68, 0.8)'] }]
             };
 
             const chartOptions = {
@@ -630,10 +628,7 @@
                     legend: { display: false },
                     title: { display: true, text: 'Produção Geral x Meta da Atividade', color: '#d1d5db', font: { size: 16 } }
                 },
-                scales: { 
-                    y: { beginAtZero: true, ticks: { color: '#d1d5db' } }, 
-                    x: { ticks: { color: '#d1d5db' } } 
-                }
+                scales: { y: { beginAtZero: true, ticks: { color: '#d1d5db' } }, x: { ticks: { color: '#d1d5db' } } }
             };
 
             updateChart(canvasId, { type: 'bar', data: chartData, options: chartOptions });
@@ -663,15 +658,36 @@
         
         [filtroFuncionario, filtroAtividadeHist, filtroDataInicio, filtroDataFim].forEach(el => el.addEventListener('change', renderizarDashboards));
         btnImprimir.addEventListener('click', () => window.print());
+        btnCancelarEdicao.addEventListener('click', () => resetFormAtividade());
+
+        function resetFormAtividade() {
+            editingAtividadeId = null;
+            formAtividade.reset();
+            formAtividadeTitulo.textContent = "Nova Atividade";
+            btnSalvarAtividade.textContent = "Salvar Atividade";
+            btnCancelarEdicao.classList.add('hidden');
+        }
 
         formAtividade.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const nome = nomeAtividadeInput.value.trim(); const meta = parseFloat(metaAtividadeInput.value);
-            if (nome && !isNaN(meta)) {
-                try { await addDoc(atividadesCol, { nome, meta }); formAtividade.reset(); } 
-                catch (err) { console.error(err); alert("Erro ao salvar atividade."); }
+            const nome = nomeAtividadeInput.value.trim(); 
+            const meta = parseFloat(metaAtividadeInput.value);
+            if (!nome || isNaN(meta)) return;
+
+            try {
+                if (editingAtividadeId) {
+                    const atividadeRef = doc(db, atividadesCol.path, editingAtividadeId);
+                    await updateDoc(atividadeRef, { nome, meta });
+                } else {
+                    await addDoc(atividadesCol, { nome, meta });
+                }
+                resetFormAtividade();
+            } catch (err) {
+                console.error("Erro ao salvar atividade:", err);
+                alert("Erro ao salvar atividade.");
             }
         });
+
         formFuncionario.addEventListener('submit', async (e) => {
             e.preventDefault(); const nome = nomeFuncionarioInput.value.trim();
             if (nome) {
@@ -688,8 +704,16 @@
         });
         formLancamento.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const atividadeId = atividadeLancamentoSelect.value;
+            const atividadeSelecionada = atividades.find(a => a.id === atividadeId);
+            if (!atividadeSelecionada) {
+                alert("Atividade selecionada não é válida.");
+                return;
+            }
+            const metaNoMomento = atividadeSelecionada.meta;
+
             const data = dataInput.value, horaInicial = horaInicialInput.value, horaFinal = horaFinalInput.value;
-            const atividadeId = atividadeLancamentoSelect.value, funcionarioId = funcionarioLancamentoSelect.value, transportadoraId = transportadoraLancamentoSelect.value;
+            const funcionarioId = funcionarioLancamentoSelect.value, transportadoraId = transportadoraLancamentoSelect.value;
             const quantidade = parseInt(quantidadeInput.value), pausaMinutos = parseInt(pausaInput.value) || 0, motivoPausa = motivoPausaInput.value.trim();
             if (!data || !horaInicial || !horaFinal || !atividadeId || !funcionarioId || !transportadoraId || isNaN(quantidade)) { alert("Por favor, preencha todos os campos obrigatórios."); return; }
             const inicio = new Date(`${data}T${horaInicial}`), fim = new Date(`${data}T${horaFinal}`);
@@ -698,7 +722,7 @@
             if (tempoPausaMs >= tempoTotalMs) { alert("O tempo de pausa não pode ser maior ou igual ao tempo total."); return; }
             const tempoLiquidoMs = tempoTotalMs - tempoPausaMs, tempoLiquidoHoras = tempoLiquidoMs / 3600000;
             const producaoHora = tempoLiquidoHoras > 0 ? quantidade / tempoLiquidoHoras : 0;
-            const novoLancamento = { data, horaInicial, horaFinal, atividadeId, funcionarioId, transportadoraId, quantidade, pausaMinutos, motivoPausa, tempoLiquido: tempoLiquidoMs, producaoHora };
+            const novoLancamento = { data, horaInicial, horaFinal, atividadeId, funcionarioId, transportadoraId, quantidade, pausaMinutos, motivoPausa, tempoLiquido: tempoLiquidoMs, producaoHora, metaNoLancamento: metaNoMomento };
             try {
                 await addDoc(lancamentosCol, novoLancamento);
                 formLancamento.reset(); pausaInput.value = 0; dataInput.value = new Date().toISOString().split('T')[0];
@@ -706,12 +730,26 @@
         });
         
         document.querySelector('main').addEventListener('click', async (e) => {
-            if (!e.target.classList.contains('btn-excluir')) return;
-            const id = e.target.dataset.id, type = e.target.dataset.type;
-            const colMap = { atividade: atividadesCol, funcionario: funcionariosCol, transportadora: transportadorasCol, lancamento: lancamentosCol };
-            if (confirm(`Tem certeza que deseja excluir este item?`)) {
-                try { await deleteDoc(doc(db, colMap[type].path, id)); } 
-                catch (err) { console.error(err); alert(`Erro ao excluir ${type}.`); }
+            const target = e.target;
+            if (target.classList.contains('btn-excluir')) {
+                const id = target.dataset.id, type = target.dataset.type;
+                const colMap = { atividade: atividadesCol, funcionario: funcionariosCol, transportadora: transportadorasCol, lancamento: lancamentosCol };
+                if (confirm(`Tem certeza que deseja excluir este item?`)) {
+                    try { await deleteDoc(doc(db, colMap[type].path, id)); } 
+                    catch (err) { console.error(err); alert(`Erro ao excluir ${type}.`); }
+                }
+            } else if (target.classList.contains('btn-editar')) {
+                 const id = target.dataset.id;
+                 const atividadeParaEditar = atividades.find(a => a.id === id);
+                 if (atividadeParaEditar) {
+                    editingAtividadeId = id;
+                    nomeAtividadeInput.value = atividadeParaEditar.nome;
+                    metaAtividadeInput.value = atividadeParaEditar.meta;
+                    formAtividadeTitulo.textContent = "Editar Atividade";
+                    btnSalvarAtividade.textContent = "Atualizar Atividade";
+                    btnCancelarEdicao.classList.remove('hidden');
+                    nomeAtividadeInput.focus();
+                 }
             }
         });
         
