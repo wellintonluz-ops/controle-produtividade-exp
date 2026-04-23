@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -74,8 +75,14 @@
             <p class="text-gray-400 mt-2">Cadastre suas atividades e registre seus lançamentos para acompanhar o desempenho.</p>
         </header>
 
-        <!-- Botão de Impressão -->
-        <div class="flex justify-end mb-4 no-print">
+        <!-- Botões de Ação -->
+        <div class="flex justify-end mb-4 no-print gap-2">
+            <button id="btn-importar" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+                Importar Dados
+            </button>
             <button id="btn-imprimir" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd" />
@@ -169,10 +176,19 @@
                             </select>
                         </div>
                     </div>
+                    <div class="flex gap-2 mb-4 no-print">
+                        <button id="btn-excluir-selecionados" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                            Excluir Selecionados
+                        </button>
+                    </div>
                     <div class="table-container">
                         <table class="w-full text-sm text-left text-gray-300">
                             <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
                                 <tr>
+                                    <th scope="col" class="py-3 px-3 no-print"><input type="checkbox" id="chk-selecionar-todos" class="w-4 h-4 cursor-pointer"></th>
                                     <th scope="col" class="py-3 px-6">Data</th>
                                     <th scope="col" class="py-3 px-6">Funcionário</th>
                                     <th scope="col" class="py-3 px-6">Atividade</th>
@@ -324,6 +340,69 @@
         </main>
 
     </div>
+
+    <!-- Modal de Importação de Dados -->
+    <div id="modal-importar" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden no-print">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-4xl mx-4 max-h-screen overflow-y-auto">
+            <h2 class="text-2xl font-bold text-white mb-1 border-b border-gray-700 pb-3">Importar Dados de Planilha</h2>
+
+            <!-- Passo 1: Selecionar arquivo e atividade -->
+            <div id="import-step-1">
+                <p class="text-gray-400 text-sm my-4">Selecione um arquivo <strong class="text-gray-200">.xlsx</strong> ou <strong class="text-gray-200">.csv</strong> com as colunas: <span class="text-indigo-300">Data de criação, Data da conclusão, Total de volumes separados, Transportadora, Responsável, Pausa</span>. Transportadoras e responsáveis novos serão criados automaticamente.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                    <div>
+                        <label class="block mb-2 text-sm font-medium text-gray-300">Arquivo (.xlsx ou .csv)</label>
+                        <input type="file" id="import-file" accept=".xlsx,.xls,.csv"
+                            class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer">
+                    </div>
+                    <div>
+                        <label class="block mb-2 text-sm font-medium text-gray-300">Atividade (aplicada a todos os registros)</label>
+                        <select id="import-atividade-select" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="">Selecione uma atividade</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="import-error" class="hidden bg-red-900 bg-opacity-60 border border-red-700 text-red-300 rounded-lg p-3 mb-4 text-sm"></div>
+                <div class="flex gap-3">
+                    <button id="btn-preview-import" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Visualizar Dados</button>
+                    <button id="btn-fechar-modal" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Cancelar</button>
+                </div>
+            </div>
+
+            <!-- Passo 2: Preview e confirmação -->
+            <div id="import-step-2" class="hidden">
+                <p id="import-preview-info" class="text-gray-300 text-sm my-4 font-medium"></p>
+                <div id="import-warning" class="hidden bg-yellow-900 bg-opacity-60 border border-yellow-700 text-yellow-300 rounded-lg p-3 mb-3 text-sm"></div>
+                <div class="max-h-64 overflow-y-auto mb-5 rounded-lg border border-gray-700">
+                    <table class="w-full text-sm text-left text-gray-300">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-700 sticky top-0">
+                            <tr>
+                                <th class="py-2 px-3">Data</th>
+                                <th class="py-2 px-3">H. Início</th>
+                                <th class="py-2 px-3">H. Fim</th>
+                                <th class="py-2 px-3">Qtd.</th>
+                                <th class="py-2 px-3">Transportadora</th>
+                                <th class="py-2 px-3">Responsável</th>
+                                <th class="py-2 px-3">Pausa (min)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="import-preview-body"></tbody>
+                    </table>
+                </div>
+                <div id="import-progress" class="hidden mb-5">
+                    <div class="bg-gray-700 rounded-full h-2.5 mb-1.5">
+                        <div id="import-progress-bar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p id="import-progress-text" class="text-xs text-gray-400 text-center">Importando...</p>
+                </div>
+                <div class="flex gap-3">
+                    <button id="btn-confirmar-import" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Confirmar Importação</button>
+                    <button id="btn-voltar-import" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Voltar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <script type="module">
         // Importações do Firebase
@@ -514,8 +593,9 @@
                 const percentual = metaDoLancamento > 0 ? (l.producaoHora / metaDoLancamento) * 100 : 0;
                 let corPercentual = 'text-yellow-400';
                 if (percentual >= 100) corPercentual = 'text-green-400'; else if (percentual < 80) corPercentual = 'text-red-400';
-                const tr = document.createElement('tr'); tr.className = 'bg-gray-800 border-b border-gray-700';
+                const tr = document.createElement('tr'); tr.className = 'bg-gray-800 border-b border-gray-700'; tr.dataset.lancamentoId = l.id;
                 tr.innerHTML = `
+                    <td class="py-4 px-3 no-print"><input type="checkbox" class="lancamento-checkbox w-4 h-4 cursor-pointer" data-id="${l.id}"></td>
                     <td class="py-4 px-6">${new Date(l.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
                     <td class="py-4 px-6">${funcionario ? funcionario.nome : 'Excluído(a)'}</td>
                     <td class="py-4 px-6 font-medium text-white">${atividade ? atividade.nome : 'Excluída'}</td>
@@ -529,6 +609,14 @@
                     <td class="py-4 px-6 no-print"><button data-id="${l.id}" data-type="lancamento" class="btn-excluir text-red-500 hover:text-red-700 font-semibold">Excluir</button></td>`;
                 return tr;
             });
+            // Sincronizar checkboxes com seleções mantidas
+            document.querySelectorAll('.lancamento-checkbox').forEach(cb => {
+                if (selectedLancamentos.has(cb.dataset.id)) {
+                    cb.checked = true;
+                }
+            });
+            atualizarCheckboxMestre();
+            atualizarEstadoBotaoExcluir();
         };
         
         const atualizarDropdown = (select, items, placeholder, comGeral) => {
@@ -560,6 +648,7 @@
         };
 
         const formatarTempo = (ms) => {
+            if (!Number.isFinite(ms)) return '00:00:00';
             if (ms < 0) ms = 0;
             const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), s = Math.floor(((ms % 3600000) % 60000) / 1000);
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
@@ -797,6 +886,17 @@
             btnCancelarEdicao.classList.add('hidden');
         }
 
+        function isSameLancamentoIdentity(lancamento, identidade) {
+            return (
+                lancamento.data === identidade.data &&
+                lancamento.horaInicial === identidade.horaInicial &&
+                lancamento.horaFinal === identidade.horaFinal &&
+                lancamento.atividadeId === identidade.atividadeId &&
+                lancamento.funcionarioId === identidade.funcionarioId &&
+                lancamento.transportadoraId === identidade.transportadoraId
+            );
+        }
+
         formAtividade.addEventListener('submit', async (e) => {
             e.preventDefault();
             const nome = nomeAtividadeInput.value.trim(); 
@@ -853,7 +953,12 @@
             const producaoHora = tempoLiquidoHoras > 0 ? quantidade / tempoLiquidoHoras : 0;
             const novoLancamento = { data, horaInicial, horaFinal, atividadeId, funcionarioId, transportadoraId, quantidade, pausaMinutos, motivoPausa, tempoLiquido: tempoLiquidoMs, producaoHora, metaNoLancamento: metaNoMomento };
             try {
-                await addDoc(lancamentosCol, novoLancamento);
+                const lancamentoExistente = lancamentos.find(l => isSameLancamentoIdentity(l, novoLancamento));
+                if (lancamentoExistente) {
+                    await updateDoc(doc(db, lancamentosCol.path, lancamentoExistente.id), novoLancamento);
+                } else {
+                    await addDoc(lancamentosCol, novoLancamento);
+                }
                 formLancamento.reset(); pausaInput.value = 0; dataInput.value = new Date().toISOString().split('T')[0];
             } catch (err) { console.error(err); alert("Erro ao salvar lançamento."); }
         });
@@ -882,6 +987,70 @@
             }
         });
         
+        // ======= SELEÇÃO MÚLTIPLA E EXCLUSÃO EM LOTE =======
+        const selectedLancamentos = new Set();
+        const chkSelecionarTodos = document.getElementById('chk-selecionar-todos');
+        const btnExcluirSelecionados = document.getElementById('btn-excluir-selecionados');
+        
+        const atualizarEstadoBotaoExcluir = () => {
+            btnExcluirSelecionados.disabled = selectedLancamentos.size === 0;
+        };
+        
+        const atualizarCheckboxMestre = () => {
+            const allCheckboxes = Array.from(document.querySelectorAll('.lancamento-checkbox'));
+            const allChecked = allCheckboxes.length > 0 && allCheckboxes.every(cb => cb.checked);
+            chkSelecionarTodos.checked = allChecked;
+        };
+        
+        chkSelecionarTodos.addEventListener('change', (e) => {
+            const shouldCheck = e.target.checked;
+            document.querySelectorAll('.lancamento-checkbox').forEach(cb => cb.checked = shouldCheck);
+            if (shouldCheck) {
+                document.querySelectorAll('.lancamento-checkbox').forEach(cb => selectedLancamentos.add(cb.dataset.id));
+            } else {
+                selectedLancamentos.clear();
+            }
+            atualizarEstadoBotaoExcluir();
+        });
+        
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('lancamento-checkbox')) {
+                const id = e.target.dataset.id;
+                if (e.target.checked) {
+                    selectedLancamentos.add(id);
+                } else {
+                    selectedLancamentos.delete(id);
+                }
+                atualizarCheckboxMestre();
+                atualizarEstadoBotaoExcluir();
+            }
+        });
+        
+        btnExcluirSelecionados.addEventListener('click', async () => {
+            if (selectedLancamentos.size === 0) return;
+            
+            if (!confirm(`Tem certeza que deseja excluir ${selectedLancamentos.size} registro(s)?`)) return;
+            
+            try {
+                let contadorExcluido = 0;
+                for (const id of selectedLancamentos) {
+                    try {
+                        await deleteDoc(doc(db, lancamentosCol.path, id));
+                        contadorExcluido++;
+                    } catch (err) {
+                        console.error(`Erro ao excluir lançamento ${id}:`, err);
+                    }
+                }
+                selectedLancamentos.clear();
+                chkSelecionarTodos.checked = false;
+                atualizarEstadoBotaoExcluir();
+                alert(`${contadorExcluido} registro(s) excluído(s) com sucesso!`);
+            } catch (err) {
+                console.error('Erro ao excluir selecionados:', err);
+                alert('Erro ao excluir registros.');
+            }
+        });
+        
         let initialDashboardLoad = true;
         function initUIDashboards() {
             if (initialDashboardLoad) {
@@ -898,6 +1067,335 @@
             const hojeFormatado = new Date().toISOString().split('T')[0];
             dataInput.value = hojeFormatado;
         };
+
+        // ======= IMPORTAÇÃO DE DADOS =======
+        const modalImportar      = document.getElementById('modal-importar');
+        const btnImportarDados   = document.getElementById('btn-importar');
+        const btnFecharModal     = document.getElementById('btn-fechar-modal');
+        const btnPreviewImport   = document.getElementById('btn-preview-import');
+        const btnConfirmarImport = document.getElementById('btn-confirmar-import');
+        const btnVoltarImport    = document.getElementById('btn-voltar-import');
+        const importFileInput    = document.getElementById('import-file');
+        const importAtividadeSelect = document.getElementById('import-atividade-select');
+        const importStep1        = document.getElementById('import-step-1');
+        const importStep2        = document.getElementById('import-step-2');
+        const importPreviewBody  = document.getElementById('import-preview-body');
+        const importPreviewInfo  = document.getElementById('import-preview-info');
+        const importErrorEl      = document.getElementById('import-error');
+        const importWarningEl    = document.getElementById('import-warning');
+        const importProgressEl   = document.getElementById('import-progress');
+        const importProgressBar  = document.getElementById('import-progress-bar');
+        const importProgressText = document.getElementById('import-progress-text');
+
+        let parsedImportRows = [];
+
+        function showImportError(msg) {
+            importErrorEl.textContent = msg;
+            importErrorEl.classList.remove('hidden');
+        }
+
+        function updateImportAtividadeDropdown() {
+            const valorAtual = importAtividadeSelect.value;
+            importAtividadeSelect.innerHTML = '<option value="">Selecione uma atividade</option>';
+            atividades.forEach(a => importAtividadeSelect.innerHTML += `<option value="${a.id}">${a.nome}</option>`);
+            importAtividadeSelect.value = valorAtual;
+        }
+
+        // Parseia valores de planilha para { date: 'YYYY-MM-DD', time: 'HH:MM' }
+        function parseBRDateTime(val) {
+            if (val == null || val === '') return null;
+            const pad = n => String(n).padStart(2, '0');
+
+            const serialAsString = typeof val === 'string' ? Number(String(val).trim().replace(',', '.')) : NaN;
+            if (Number.isFinite(serialAsString) && window.XLSX?.SSF?.parse_date_code) {
+                const parsed = window.XLSX.SSF.parse_date_code(serialAsString);
+                if (parsed) {
+                    return {
+                        date: `${parsed.y}-${pad(parsed.m)}-${pad(parsed.d)}`,
+                        time: `${pad(parsed.H)}:${pad(parsed.M)}`
+                    };
+                }
+            }
+
+            if (typeof val === 'number' && Number.isFinite(val) && window.XLSX?.SSF?.parse_date_code) {
+                const parsed = window.XLSX.SSF.parse_date_code(val);
+                if (parsed) {
+                    return {
+                        date: `${parsed.y}-${pad(parsed.m)}-${pad(parsed.d)}`,
+                        time: `${pad(parsed.H)}:${pad(parsed.M)}`
+                    };
+                }
+            }
+
+            if (val instanceof Date) {
+                return {
+                    date: `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())}`,
+                    time: `${pad(val.getHours())}:${pad(val.getMinutes())}`
+                };
+            }
+            const str = String(val).trim();
+
+            const brMatch = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4}).*?(\d{1,2}):(\d{2})/);
+            if (brMatch) {
+                const ano = brMatch[3].length === 2 ? `20${brMatch[3]}` : brMatch[3];
+                return {
+                    date: `${ano}-${pad(brMatch[2])}-${pad(brMatch[1])}`,
+                    time: `${pad(brMatch[4])}:${pad(brMatch[5])}`
+                };
+            }
+
+            const isoMatch = str.match(/(\d{4})-(\d{1,2})-(\d{1,2}).*?(\d{1,2}):(\d{2})/);
+            if (isoMatch) {
+                return {
+                    date: `${isoMatch[1]}-${pad(isoMatch[2])}-${pad(isoMatch[3])}`,
+                    time: `${pad(isoMatch[4])}:${pad(isoMatch[5])}`
+                };
+            }
+
+            const usMatch = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4}).*?(\d{1,2}):(\d{2})/);
+            if (usMatch) {
+                const ano = usMatch[3].length === 2 ? `20${usMatch[3]}` : usMatch[3];
+                return {
+                    date: `${ano}-${pad(usMatch[1])}-${pad(usMatch[2])}`,
+                    time: `${pad(usMatch[4])}:${pad(usMatch[5])}`
+                };
+            }
+
+            return null;
+        }
+
+        // Encontra o nome da coluna que contém algum dos candidatos (case-insensitive)
+        function findColumnKey(headers, candidates) {
+            for (const key of headers) {
+                const lower = key.toLowerCase().trim();
+                if (candidates.some(c => lower.includes(c.toLowerCase()))) return key;
+            }
+            return null;
+        }
+
+        function calcularDuracaoEntreDatasHoras(inicio, fim) {
+            const [inicioHora, inicioMinuto] = inicio.time.split(':').map(Number);
+            const [fimHora, fimMinuto] = fim.time.split(':').map(Number);
+
+            if (![inicioHora, inicioMinuto, fimHora, fimMinuto].every(Number.isFinite)) return NaN;
+
+            const inicioTotalMin = (inicioHora * 60) + inicioMinuto;
+            const fimTotalMin = (fimHora * 60) + fimMinuto;
+
+            const dataInicio = new Date(`${inicio.date}T00:00:00`);
+            const dataFim = new Date(`${fim.date}T00:00:00`);
+            if (!Number.isFinite(dataInicio.getTime()) || !Number.isFinite(dataFim.getTime())) return NaN;
+            const diferencaDias = Math.round((dataFim - dataInicio) / 86400000);
+            const duracaoMinutos = (diferencaDias * 1440) + (fimTotalMin - inicioTotalMin);
+
+            return duracaoMinutos * 60 * 1000;
+        }
+
+        btnImportarDados.addEventListener('click', () => {
+            updateImportAtividadeDropdown();
+            importErrorEl.classList.add('hidden');
+            importWarningEl.classList.add('hidden');
+            importProgressEl.classList.add('hidden');
+            importStep1.classList.remove('hidden');
+            importStep2.classList.add('hidden');
+            importFileInput.value = '';
+            parsedImportRows = [];
+            modalImportar.classList.remove('hidden');
+        });
+
+        btnFecharModal.addEventListener('click', () => modalImportar.classList.add('hidden'));
+        modalImportar.addEventListener('click', e => { if (e.target === modalImportar) modalImportar.classList.add('hidden'); });
+        btnVoltarImport.addEventListener('click', () => {
+            importStep2.classList.add('hidden');
+            importStep1.classList.remove('hidden');
+            importErrorEl.classList.add('hidden');
+        });
+
+        btnPreviewImport.addEventListener('click', () => {
+            const file = importFileInput.files[0];
+            const atividadeId = importAtividadeSelect.value;
+            importErrorEl.classList.add('hidden');
+
+            if (!file)        { showImportError('Por favor, selecione um arquivo.'); return; }
+            if (!atividadeId) { showImportError('Por favor, selecione uma atividade.'); return; }
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const XLSX = window.XLSX;
+                    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: false });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, {
+                        defval: '',
+                        raw: true
+                    });
+
+                    if (rows.length === 0) { showImportError('Planilha vazia ou sem dados.'); return; }
+
+                    const headers = Object.keys(rows[0]);
+
+                    const colCriacao   = findColumnKey(headers, ['criação', 'criacao', 'inicio', 'início', 'data criação', 'data de criação']);
+                    const colConclusao = findColumnKey(headers, ['conclusão', 'conclusao', 'fim', 'final', 'data conclusão', 'data da conclusão']);
+                    const colQtd       = findColumnKey(headers, ['total de volumes separados', 'total de volumes', 'volumes separados', 'quantidade', 'qtd']);
+                    const colTransp    = findColumnKey(headers, ['transportadora']);
+                    const colResp      = findColumnKey(headers, ['responsável', 'responsavel', 'funcionário', 'funcionario']);
+                    const colPausa     = findColumnKey(headers, ['pausa']);
+
+                    if (!colCriacao)   { showImportError('Coluna "Data de criação" não encontrada. Verifique os cabeçalhos da planilha.'); return; }
+                    if (!colConclusao) { showImportError('Coluna "Data da conclusão" não encontrada.'); return; }
+                    if (!colQtd)       { showImportError('Coluna de quantidade (Total de volumes separados) não encontrada.'); return; }
+                    if (!colTransp)    { showImportError('Coluna "Transportadora" não encontrada.'); return; }
+                    if (!colResp)      { showImportError('Coluna "Responsável" não encontrada.'); return; }
+
+                    parsedImportRows = [];
+                    const erros = [];
+
+                    rows.forEach((row, idx) => {
+                        const inicio          = parseBRDateTime(row[colCriacao]);
+                        const fim             = parseBRDateTime(row[colConclusao]);
+                        const qtd             = parseInt(row[colQtd]) || 0;
+                        const transportNome   = String(row[colTransp] || '').trim();
+                        const responsavelNome = String(row[colResp]   || '').trim();
+                        const pausa           = colPausa ? (parseInt(row[colPausa]) || 0) : 0;
+                        const duracaoMs       = inicio && fim ? calcularDuracaoEntreDatasHoras(inicio, fim) : NaN;
+
+                        if (!inicio || !fim)    { erros.push(`Linha ${idx + 2}: data/hora inválida.`); return; }
+                        if (!transportNome)     { erros.push(`Linha ${idx + 2}: transportadora vazia.`); return; }
+                        if (!responsavelNome)   { erros.push(`Linha ${idx + 2}: responsável vazio.`); return; }
+                        if (qtd <= 0)           { erros.push(`Linha ${idx + 2}: quantidade inválida.`); return; }
+                        if (!Number.isFinite(duracaoMs)) { erros.push(`Linha ${idx + 2}: não foi possível interpretar início/fim.`); return; }
+                        if (duracaoMs <= 0) { erros.push(`Linha ${idx + 2}: horário final deve ser maior que o inicial.`); return; }
+
+                        parsedImportRows.push({ inicio, fim, qtd, transportNome, responsavelNome, pausa });
+                    });
+
+                    if (parsedImportRows.length === 0) { showImportError('Nenhum registro válido encontrado na planilha.'); return; }
+
+                    // Montar preview
+                    importPreviewBody.innerHTML = parsedImportRows.map(r => `
+                        <tr class="bg-gray-800 border-b border-gray-700">
+                            <td class="py-2 px-3">${r.inicio.date}</td>
+                            <td class="py-2 px-3">${r.inicio.time}</td>
+                            <td class="py-2 px-3">${r.fim.time}</td>
+                            <td class="py-2 px-3">${r.qtd}</td>
+                            <td class="py-2 px-3">${r.transportNome}</td>
+                            <td class="py-2 px-3">${r.responsavelNome}</td>
+                            <td class="py-2 px-3">${r.pausa}</td>
+                        </tr>
+                    `).join('');
+
+                    importPreviewInfo.textContent = `${parsedImportRows.length} registro(s) pronto(s) para importar.${erros.length > 0 ? ` (${erros.length} linha(s) ignorada(s) por dados inválidos)` : ''}`;
+
+                    if (erros.length > 0) {
+                        importWarningEl.textContent = 'Linhas ignoradas: ' + erros.join(' | ');
+                        importWarningEl.classList.remove('hidden');
+                    } else {
+                        importWarningEl.classList.add('hidden');
+                    }
+
+                    importProgressEl.classList.add('hidden');
+                    importProgressBar.style.width = '0%';
+                    importStep1.classList.add('hidden');
+                    importStep2.classList.remove('hidden');
+
+                } catch (err) {
+                    console.error(err);
+                    showImportError('Erro ao ler o arquivo. Verifique se é um Excel (.xlsx) ou CSV válido.');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        btnConfirmarImport.addEventListener('click', async () => {
+            const atividadeId = importAtividadeSelect.value;
+            const atividade   = atividades.find(a => a.id === atividadeId);
+            if (!atividade || parsedImportRows.length === 0) return;
+
+            btnConfirmarImport.disabled = true;
+            btnVoltarImport.disabled    = true;
+            importProgressEl.classList.remove('hidden');
+
+            const total = parsedImportRows.length;
+            let importados = 0;
+
+            // Cache local para evitar criar duplicatas dentro da mesma importação
+            const funcCache  = {};
+            const transpCache = {};
+
+            for (const row of parsedImportRows) {
+                try {
+                    // Resolver funcionário (match case-insensitive)
+                    const respKey = row.responsavelNome.toLowerCase();
+                    if (!funcCache[respKey]) {
+                        const existente = funcionarios.find(f => f.nome.toLowerCase() === respKey);
+                        if (existente) {
+                            funcCache[respKey] = existente.id;
+                        } else {
+                            const docRef = await addDoc(funcionariosCol, { nome: row.responsavelNome });
+                            funcCache[respKey] = docRef.id;
+                        }
+                    }
+
+                    // Resolver transportadora (match case-insensitive)
+                    const transpKey = row.transportNome.toLowerCase();
+                    if (!transpCache[transpKey]) {
+                        const existente = transportadoras.find(t => t.nome.toLowerCase() === transpKey);
+                        if (existente) {
+                            transpCache[transpKey] = existente.id;
+                        } else {
+                            const docRef = await addDoc(transportadorasCol, { nome: row.transportNome });
+                            transpCache[transpKey] = docRef.id;
+                        }
+                    }
+
+                    // Calcular tempos
+                    const tempoTotalMs = calcularDuracaoEntreDatasHoras(row.inicio, row.fim);
+                    const tempoPausaMs  = row.pausa * 60 * 1000;
+                    const tempoLiquidoMs = Math.max(0, tempoTotalMs - tempoPausaMs);
+                    const producaoHora  = tempoLiquidoMs > 0 ? row.qtd / (tempoLiquidoMs / 3600000) : 0;
+
+                    const lancamentoImportado = {
+                        data:            row.inicio.date,
+                        horaInicial:     row.inicio.time,
+                        horaFinal:       row.fim.time,
+                        atividadeId,
+                        funcionarioId:   funcCache[respKey],
+                        transportadoraId: transpCache[transpKey],
+                        quantidade:      row.qtd,
+                        pausaMinutos:    row.pausa,
+                        motivoPausa:     '',
+                        tempoLiquido:    tempoLiquidoMs,
+                        producaoHora,
+                        metaNoLancamento: atividade.meta
+                    };
+
+                    const lancamentoExistente = lancamentos.find(l => isSameLancamentoIdentity(l, lancamentoImportado));
+                    if (lancamentoExistente) {
+                        await updateDoc(doc(db, lancamentosCol.path, lancamentoExistente.id), lancamentoImportado);
+                    } else {
+                        await addDoc(lancamentosCol, lancamentoImportado);
+                    }
+
+                    importados++;
+                } catch (err) {
+                    console.error('Erro ao importar registro:', err);
+                }
+
+                const pct = Math.round((importados / total) * 100);
+                importProgressBar.style.width = pct + '%';
+                importProgressText.textContent = `Importando ${importados} de ${total}...`;
+            }
+
+            importProgressText.textContent = `✓ ${importados} de ${total} registro(s) importado(s) com sucesso!`;
+            importProgressBar.style.width = '100%';
+
+            setTimeout(() => {
+                modalImportar.classList.add('hidden');
+                btnConfirmarImport.disabled = false;
+                btnVoltarImport.disabled    = false;
+                parsedImportRows = [];
+            }, 2000);
+        });
 
     </script>
 </body>
